@@ -2,7 +2,7 @@ import asyncio
 import json
 import ssl
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, TypeVar
 from urllib.parse import quote_plus
 
 import aio_pika
@@ -15,9 +15,12 @@ from aio_pika.abc import (
     AbstractQueue,
     ConsumerTag,
 )
+from pydantic import BaseModel
 
 from src.core.logger import AppLogger
 from src.interfaces.messaging.client import IAMQPClient
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class RabbitMQClient(IAMQPClient):
@@ -122,7 +125,8 @@ class RabbitMQClient(IAMQPClient):
     async def consume(
             self,
             queue_name: str,
-            handler: Callable[[dict[str, Any]], Awaitable[None]],
+            handler: Callable[[T], Awaitable[None]],
+            model: type[T],
             exchange: str | None = None,
             routing_key: str | None = None,
             exchange_type: str = aio_pika.ExchangeType.TOPIC,
@@ -137,8 +141,9 @@ class RabbitMQClient(IAMQPClient):
         async def on_message(message: AbstractIncomingMessage) -> None:
             async with message.process(requeue=False):
                 try:
-                    data = json.loads(message.body.decode())
-                    await handler(data)
+                    raw = json.loads(message.body.decode())
+                    payload = model.model_validate(raw)
+                    await handler(payload)
                 except Exception as e:
                     self._logger.error(f"Message handler failed: {e!s}")
                     raise

@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar
+
+from pydantic import BaseModel
 
 
 class AMQPExchangeType(StrEnum):
@@ -11,9 +13,14 @@ class AMQPExchangeType(StrEnum):
     Headers = "headers"
 
 
+T = TypeVar("T", bound=BaseModel)
+
+
 class IQueue(Protocol):
     async def bind(self, exchange: Any, routing_key: str) -> None: ...
+
     async def consume(self, callback: Any) -> str: ...
+
     async def cancel(self, consumer_tag: str) -> None: ...
 
 
@@ -44,10 +51,11 @@ class IAMQPClient(ABC):
     async def consume(
             self,
             queue_name: str,
-            handler: Callable[[dict[str, Any]], Awaitable[None]],
+            handler: Callable[[T], Awaitable[None]],
+            model: type[T],
+            exchange_type: str,
             exchange: str | None = None,
             routing_key: str | None = None,
-            exchange_type: str = "topic",
     ) -> None:
         raise NotImplementedError
 
