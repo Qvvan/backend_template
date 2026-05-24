@@ -40,19 +40,14 @@ class AppLogger:
 
     def __init__(self, level: str = "INFO"):
         self.level = level.upper()
-        self._logger = self._configure()
+        self._logger = logging.getLogger("app")
+        self._logger.setLevel(self.level)
+        self._logger.propagate = False
 
-    def _configure(self) -> logging.Logger:
-        logger = logging.getLogger("app")
-        logger.setLevel(self.level)
-        logger.propagate = False
-
-        if not logger.handlers:
+        if not self._logger.handlers:
             handler = logging.StreamHandler(sys.stdout)
             handler.setFormatter(JsonFormatter())
-            logger.addHandler(handler)
-
-        return logger
+            self._logger.addHandler(handler)
 
     @classmethod
     def set_request_id(cls, request_id: str) -> None:
@@ -62,30 +57,26 @@ class AppLogger:
     def clear_request_id(cls) -> None:
         request_context.set(None)
 
-    @classmethod
-    def _get_logger(cls) -> logging.Logger:
-        return logging.getLogger("app")
-
     @staticmethod
     def _extra(fields: dict[str, Any]) -> dict[str, Any]:
         return {"request_id": request_context.get(), "fields": fields}
 
     def debug(self, message: str, **fields: Any) -> None:
-        self._get_logger().debug(message, extra=self._extra(fields))
+        self._logger.debug(message, extra=self._extra(fields))
 
     def info(self, message: str, **fields: Any) -> None:
-        self._get_logger().info(message, extra=self._extra(fields))
+        self._logger.info(message, extra=self._extra(fields))
 
     def warning(self, message: str, **fields: Any) -> None:
-        self._get_logger().warning(message, extra=self._extra(fields))
+        self._logger.warning(message, extra=self._extra(fields))
 
     def error(self, message: str, **fields: Any) -> None:
         has_active_exception = sys.exc_info()[0] is not None
-        self._get_logger().error(
+        self._logger.error(
             message,
             extra=self._extra(fields),
             exc_info=has_active_exception,
         )
 
     def critical(self, message: str, **fields: Any) -> None:
-        self._get_logger().critical(message, extra=self._extra(fields))
+        self._logger.critical(message, extra=self._extra(fields))

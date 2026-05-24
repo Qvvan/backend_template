@@ -27,6 +27,9 @@ class AsyncScheduler:
     async def stop_worker(self, name: str) -> None:
         if name in self.stop_events:
             self.stop_events[name].set()
+            task = self._tasks.get(name)
+            if task:
+                await asyncio.shield(task)
             self._tasks.pop(name, None)
             self.logger.info(f"Worker {name} stopped")
 

@@ -10,7 +10,7 @@ from src.interfaces.clients.db.connection import IDBTransactional
 
 
 class PostgresConnectionPool(IDBTransactional):
-    __slots__ = ("_logger", "_pool", "dsn", "echo", "pool_size", "_command_timeout", "_statement_cache_size")
+    __slots__ = ("_logger", "_pool", "dsn", "echo", "pool_size", "_command_timeout", "_statement_cache_size", "_connect_lock")
 
     def __init__(
         self,
@@ -33,6 +33,7 @@ class PostgresConnectionPool(IDBTransactional):
         self._command_timeout = command_timeout
         self._statement_cache_size = statement_cache_size
         self._pool: asyncpg.Pool | None = None
+        self._connect_lock = asyncio.Lock()
 
     async def connect(self) -> None:
         """Создает пул соединений с БД"""
@@ -61,7 +62,9 @@ class PostgresConnectionPool(IDBTransactional):
     @asynccontextmanager
     async def get_connection(self) -> AsyncGenerator[asyncpg.Connection, None]:
         if not self._pool:
-            await self.connect()
+            async with self._connect_lock:
+                if not self._pool:
+                    await self.connect()
 
         async with self._pool.acquire() as connection:
             yield connection
@@ -80,11 +83,12 @@ class PostgresConnectionPool(IDBTransactional):
 
     async def health_check(self) -> bool:
         try:
-            if self._pool is None:
-                await asyncio.wait_for(self.connect(), 3)
-            async with self.get_connection() as conn: # type: ignore[override]
-                await conn.execute("SELECT 1")
-                return True
+            async with asyncio.timeout(5):
+                if self._pool is None:
+                    await self.connect()
+                async with self.get_connection() as conn: # type: ignore[override]
+                    await conn.execute("SELECT 1")
+                    return True
         except Exception as e:
             self._logger.error(f"Health check failed: {e!s}")
             return False

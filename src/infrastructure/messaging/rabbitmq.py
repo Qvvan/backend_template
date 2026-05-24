@@ -51,7 +51,7 @@ class RabbitMQClient(IAMQPClient):
         self._url = f"{protocol}://{user}:{quote_plus(password)}@{host}:{port}/{vhost}"
         self._connection: AbstractConnection | None = None
         self._channel: AbstractChannel | None = None
-        self._exchange_cache: dict[str, AbstractExchange] = {}
+        self._exchange_cache: dict[tuple[str, str], AbstractExchange] = {}
         self._queue_list: dict[AbstractQueue, ConsumerTag] = {}
         self._tls_enabled: bool = tls_enabled
         self._logger = logger
@@ -76,16 +76,19 @@ class RabbitMQClient(IAMQPClient):
         """Закрывает соединение"""
         if self._channel:
             await self._channel.close()
+            self._channel = None
         if self._connection:
             await self._connection.close()
+            self._connection = None
 
     async def declare_exchange(self, name: str, exchange_type: str = aio_pika.ExchangeType.TOPIC) -> AbstractExchange:
         if not self._channel:
             await self.connect()
-        ex = self._exchange_cache.get(name)
+        cache_key = (name, exchange_type)
+        ex = self._exchange_cache.get(cache_key)
         if not ex:
             ex = await self._channel.declare_exchange(name, aio_pika.ExchangeType(exchange_type), durable=True)
-            self._exchange_cache[name] = ex
+            self._exchange_cache[cache_key] = ex
         return ex
 
     async def declare_queue(
@@ -126,9 +129,13 @@ class RabbitMQClient(IAMQPClient):
             queue = await self._channel.declare_queue(queue_name, durable=True, passive=False)
 
         async def on_message(message: AbstractIncomingMessage) -> None:
-            async with message.process():
-                data = json.loads(message.body.decode())
-                await handler(data)
+            async with message.process(requeue=False):
+                try:
+                    data = json.loads(message.body.decode())
+                    await handler(data)
+                except Exception as e:
+                    self._logger.error(f"Message handler failed: {e!s}")
+                    raise
 
         consumer_tag = await queue.consume(on_message)
         self._queue_list[queue] = consumer_tag

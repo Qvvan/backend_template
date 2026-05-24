@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from enum import StrEnum
-from typing import Any
+from typing import Any, Protocol
 
 
 class AMQPExchangeType(StrEnum):
@@ -9,6 +9,12 @@ class AMQPExchangeType(StrEnum):
     Fanout = "fanout"
     Topic = "topic"
     Headers = "headers"
+
+
+class IQueue(Protocol):
+    async def bind(self, exchange: Any, routing_key: str) -> None: ...
+    async def consume(self, callback: Any) -> str: ...
+    async def cancel(self, consumer_tag: str) -> None: ...
 
 
 class IAMQPClient(ABC):
@@ -30,12 +36,12 @@ class IAMQPClient(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def declare_queue(self, name: str, exchange: str, routing_key: str, exchange_type: str = "topic") -> None:
+    async def declare_queue(self, name: str, exchange: str, routing_key: str, exchange_type: str = "topic") -> IQueue:
         """Объявляет очередь и привязывает к exchange"""
         raise NotImplementedError
 
     @abstractmethod
-    async def publish(self, exchange: str, routing_key: str, data: dict[str, Any]) -> None:
+    async def publish(self, exchange: str, routing_key: str, payload: dict[str, Any]) -> None:
         """Публикует сообщение в exchange"""
         raise NotImplementedError
 
@@ -43,10 +49,10 @@ class IAMQPClient(ABC):
     async def consume(
             self,
             queue_name: str,
-            handler: Callable[...],
+            handler: Callable[[dict[str, Any]], Awaitable[None]],
             exchange: str | None = None,
             routing_key: str | None = None,
-            exchange_type: str = ...,
+            exchange_type: str = "topic",
     ) -> None:
         raise NotImplementedError
 
