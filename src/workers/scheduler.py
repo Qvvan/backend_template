@@ -51,7 +51,6 @@ class AsyncScheduler:
                 self.logger.info(f"Stop signal sent to {w.name}")
 
     def start(self) -> None:
-        """Запуск всех воркеров (неблокирующий). Используется в lifespan FastAPI."""
         self.logger.info("Scheduler starting workers...")
         self._register_tasks()
         self.logger.info(f"Scheduler started {len(self._tasks)} workers")

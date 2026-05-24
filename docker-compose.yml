@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: api
     restart: always
+    profiles:
+      - app
     entrypoint: ["granian", "--interface", "asgi", "--factory", "--loop", "uvloop", "--host", "0.0.0.0", "--workers", "1", "src.main:create_app"]
     ports:
       - "${APP_PORT}:8000"
@@ -93,7 +95,7 @@ services:
     container_name: migrate
     profiles:
       - infra
-    command: [ "yoyo", "apply", "--batch", "--database", "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DATABASE}", "./migrations" ]
+    command: [ "yoyo", "-vvv", "apply", "--batch", "--database", "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DATABASE}", "./migrations" ]
     env_file:
       - .env
     depends_on:
