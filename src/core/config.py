@@ -21,16 +21,6 @@ class PostgresConfig(ConfigBase):
     POOL_SIZE: int = 5
 
 
-class MySQLConfig(ConfigBase):
-    model_config = SettingsConfigDict(env_prefix="MYSQL_", frozen=True)
-
-    HOST: str
-    PORT: int
-    USER: str
-    PASSWORD: SecretStr
-    DB: str
-
-
 class LoggingConfig(ConfigBase):
     """Настройки логирования"""
 

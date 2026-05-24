@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI):
 
     container = app.state.container  # type: ignore
 
-    await container.workers.start()
+    container.workers.start()
 
     yield
 

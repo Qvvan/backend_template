@@ -48,6 +48,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             )
             raise
         else:
+            response.headers["X-Request-ID"] = request_id
             self.logger.info(
                 "Outgoing response",
                 type="response",

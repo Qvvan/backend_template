@@ -5,13 +5,6 @@ from src.core.container.repositories import RepositoryContainer
 
 class ServiceContainer:
     """Ленивая инициализация сервисов."""
-
-    __slots__ = (
-        "_config",
-        "_infra",
-        "_repos",
-    )
-
     def __init__(
         self,
         config: Config,

@@ -4,8 +4,6 @@ from typing import Any
 
 
 class IUnitOfWork(ABC):
-
-    @asynccontextmanager
     @abstractmethod
     async def begin(self) -> AbstractAsyncContextManager[Any]:
         raise NotImplementedError

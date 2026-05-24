@@ -16,7 +16,6 @@ class AsyncScheduler:
         self.stop_events: dict[str, asyncio.Event] = {
             w.name: asyncio.Event() for w in workers
         }
-        self._stop = asyncio.Event()
         self._tasks: list[asyncio.Task[None]] = []
 
     def _register_tasks(self):
@@ -51,10 +50,10 @@ class AsyncScheduler:
                 self.stop_events[w.name].set()
                 self.logger.info(f"Stop signal sent to {w.name}")
 
-    async def start(self) -> None:
+    def start(self) -> None:
         """Запуск всех воркеров (неблокирующий). Используется в lifespan FastAPI."""
         self.logger.info("Scheduler starting workers...")
-        await self._register_tasks()
+        self._register_tasks()
         self.logger.info(f"Scheduler started {len(self._tasks)} workers")
 
     async def wait_until_done(self) -> None:
@@ -69,9 +68,9 @@ class AsyncScheduler:
         await self._stop_workers()
 
         try:
-            self.wait_until_done(),
+            await self.wait_until_done()
             self.logger.info("All workers stopped gracefully")
-        except TimeoutError:
+        except asyncio.TimeoutError:
             self.logger.warning("Some workers didn't stop gracefully, cancelling...")
             for task in self._tasks:
                 if not task.done():

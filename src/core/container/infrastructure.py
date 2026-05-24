@@ -10,8 +10,6 @@ from src.infrastructure.uow.postgres_uow import PostgresUnitOfWork
 
 
 class InfrastructureContainer:
-    __slots__ = ("_config", "_logger")
-
     def __init__(self, config: Config, logger: AppLogger) -> None:
         self._config = config
         self._logger = logger
@@ -31,6 +29,7 @@ class InfrastructureContainer:
     @cached_property
     def redis_db(self) -> RedisDB:
         return RedisDB(
+            logger=self._logger,
             host=self._config.redis.HOST,
             port=self._config.redis.PORT,
             db=self._config.redis.DB,

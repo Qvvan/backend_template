@@ -16,10 +16,6 @@ class IAMQPClient(ABC):
     """RabbitMQ клиент для публикации и потребления сообщений"""
 
     @abstractmethod
-    async def ssl_context(self) -> ssl.SSLContext:
-        raise NotImplementedError
-
-    @abstractmethod
     async def connect(self) -> None:
         """Устанавливает соединение с RabbitMQ"""
         raise NotImplementedError
@@ -30,7 +26,7 @@ class IAMQPClient(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def declare_exchange(self, name: str, exchange_type: str = "topic") -> None:
+    async def declare_exchange(self, name: str, exchange_type: str = "topic"):
         """Объявляет exchange"""
         raise NotImplementedError
 
@@ -40,7 +36,7 @@ class IAMQPClient(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def publish(self, exchange: str, routing_key: str, data: dict) -> None:
+    async def publish(self, exchange: str, routing_key: str, data: dict[str, Any]) -> None:
         """Публикует сообщение в exchange"""
         raise NotImplementedError
 

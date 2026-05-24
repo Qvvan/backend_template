@@ -1,5 +1,6 @@
 import redis.asyncio as aioredis
 
+from src.core.logger import AppLogger
 from src.interfaces.clients.cache_client.client import ICacheDB
 
 
@@ -8,6 +9,7 @@ class RedisDB(ICacheDB):
 
     def __init__(
         self,
+        logger: AppLogger,
         host: str,
         port: int,
         db: int = 0,
@@ -16,6 +18,7 @@ class RedisDB(ICacheDB):
         socket_timeout: float = 5.0,
         socket_connect_timeout: float = 5.0,
     ) -> None:
+        self._logger = logger
         self._client = aioredis.Redis(
             host=host,
             port=port,
@@ -34,3 +37,11 @@ class RedisDB(ICacheDB):
     async def close(self) -> None:
         """Закрыть подключение."""
         await self._client.close()
+
+    async def health_check(self) -> bool:
+        try:
+            return await self._client.ping()
+        except Exception as e:
+            self._logger.error(f"Redis health check failed: {e!s}")
+            return False
+

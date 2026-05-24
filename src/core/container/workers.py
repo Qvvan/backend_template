@@ -7,9 +7,6 @@ from src.workers.scheduler import AsyncScheduler
 
 class WorkerContainer:
     """Контейнер фоновых воркеров и их планировщика."""
-
-    __slots__ = ("_logger", "_services")
-
     def __init__(self, logger: AppLogger, services: ServiceContainer) -> None:
         self._logger = logger
         self._services = services
@@ -22,8 +19,8 @@ class WorkerContainer:
                 workers=[],
             )
 
-    async def start(self) -> None:
-        await self.scheduler.start()
+    def start(self) -> None:
+        self.scheduler.start()
 
     async def close(self) -> None:
             await self.scheduler.shutdown()

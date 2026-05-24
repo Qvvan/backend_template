@@ -36,13 +36,13 @@ class RabbitMQClient(IAMQPClient):
 
     def __init__(
         self,
+        logger: AppLogger,
         user: str,
         password: str,
         host: str,
         port: int,
         vhost: str,
         ssl_context: bool,
-        logger: AppLogger,
         sert_path: str | None = None,
     ) -> None:
         protocol = "amqp"
@@ -55,21 +55,21 @@ class RabbitMQClient(IAMQPClient):
         self._queue_list: dict[AbstractQueue, ConsumerTag] = {}
         self._ssl_context: bool = ssl_context
         self._logger = logger
-        self._sert_path: str = sert_path
+        self._sert_path: str | None = sert_path
         self._prefetch_count: int = 10
 
     async def connect(self) -> None:
         """Устанавливает соединение с RabbitMQ"""
 
         if self._ssl_context:
-            ssl_cnt = await self.ssl_context()
+            ssl_cnt = self._build_ssl_context()
             self._connection = await aio_pika.connect_robust(self._url, ssl_context=ssl_cnt)
         else:
             self._connection = await aio_pika.connect_robust(self._url)
         self._channel = await self._connection.channel()
         await self._channel.set_qos(prefetch_count=self._prefetch_count)
 
-    async def ssl_context(self) -> ssl.SSLContext:
+    def _build_ssl_context(self) -> ssl.SSLContext:
         return ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=self._sert_path)
 
     async def close(self) -> None:
@@ -79,21 +79,18 @@ class RabbitMQClient(IAMQPClient):
         if self._connection:
             await self._connection.close()
 
-    async def declare_exchange(self, name: str, exchange_type: str = aio_pika.ExchangeType.TOPIC) -> None:
-        """Объявляет exchange"""
+    async def declare_exchange(self, name: str, exchange_type: str = aio_pika.ExchangeType.TOPIC) -> AbstractExchange:
         if not self._channel:
             await self.connect()
-        await self._channel.declare_exchange(name, aio_pika.ExchangeType(exchange_type), durable=True)
+        return await self._channel.declare_exchange(name, aio_pika.ExchangeType(exchange_type), durable=True)
 
     async def declare_queue(
-        self, name: str, exchange: str, routing_key: str, exchange_type: str = aio_pika.ExchangeType.TOPIC
+            self, name: str, exchange: str, routing_key: str, exchange_type: str = aio_pika.ExchangeType.TOPIC
     ) -> None:
-        """Объявляет очередь и привязывает к exchange"""
         if not self._channel:
             await self.connect()
-        await self.declare_exchange(exchange, exchange_type=exchange_type)
+        ex = await self.declare_exchange(exchange, exchange_type=exchange_type)
         queue = await self._channel.declare_queue(name, durable=True)
-        ex = await self._channel.get_exchange(exchange)
         await queue.bind(ex, routing_key)
 
     async def publish(self, exchange: str, routing_key: str, payload: dict[str, Any]) -> None:
@@ -127,15 +124,10 @@ class RabbitMQClient(IAMQPClient):
         self._queue_list[queue] = consumer_tag
 
     async def cancel_consumer(self) -> None:
-        """Отменяет consumer по его тегу"""
-        for queue, consumer_tag in self._queue_list.items():
+        for queue, consumer_tag in list(self._queue_list.items()):
             await queue.cancel(consumer_tag)
 
     async def health_check(self) -> bool:
-        try:
-            if self._connection is None or self._connection.is_closed:
-                return False
-            return not (self._channel is None or self._channel.is_closed)
-        except Exception as e:
-            self._logger.error(f"Health check failed: {e}")
+        if self._connection is None or self._connection.is_closed:
             return False
+        return not (self._channel is None or self._channel.is_closed)

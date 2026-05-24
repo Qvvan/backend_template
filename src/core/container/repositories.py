@@ -6,9 +6,6 @@ from src.infrastructure.repository.redis.repository import RedisRepository
 
 class RepositoryContainer:
     """Ленивая инициализация всех репозиториев."""
-
-    __slots__ = "_infra"
-
     def __init__(self, infra: InfrastructureContainer) -> None:
         self._infra = infra
 

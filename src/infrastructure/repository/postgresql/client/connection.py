@@ -10,7 +10,7 @@ from src.interfaces.clients.db.connection import IDBTransactional
 
 
 class PostgresConnectionPool(IDBTransactional):
-    __slots__ = ["_logger", "_pool", "dsn", "echo", "pool_size"]
+    __slots__ = ("_logger", "_pool", "dsn", "echo", "pool_size")
 
     def __init__(
         self,
@@ -32,7 +32,7 @@ class PostgresConnectionPool(IDBTransactional):
 
     async def connect(self) -> None:
         """Создает пул соединений с БД"""
-        async def init_connection(connection):
+        async def init_connection(connection: asyncpg.Connection) -> None:
             await connection.set_type_codec(
                 'uuid',
                 encoder=str,
@@ -40,7 +40,7 @@ class PostgresConnectionPool(IDBTransactional):
                 schema='pg_catalog'
             )
 
-        self._pool = await asyncpg.create_pool(
+        self._pool = await asyncpg.create_pool( # type: ignore[misc]
             self.dsn,
             min_size=self.pool_size // 2,
             max_size=self.pool_size,
@@ -49,7 +49,7 @@ class PostgresConnectionPool(IDBTransactional):
             init=init_connection
         )
         if self.echo:
-            print(f"Database pool created with {self.pool_size} connections")
+            self._logger.info(f"Database pool created with {self.pool_size} connections")
 
     @asynccontextmanager
     async def get_connection(self) -> AsyncGenerator[asyncpg.Connection, None]:
@@ -72,19 +72,11 @@ class PostgresConnectionPool(IDBTransactional):
             self._pool = None
 
     async def health_check(self) -> bool:
-        """
-        Проверяет доступность базы данных.
-
-        Returns:
-            bool: True если база данных доступна, False в противном случае.
-        """
-        if self._pool is None:
-            await asyncio.wait_for(self.connect(), 3)
-
         try:
+            if self._pool is None:
+                await asyncio.wait_for(self.connect(), 3)
             async with self.get_connection() as conn:
-                query = "SELECT 1"
-                await conn.execute(query)
+                await conn.execute("SELECT 1")
                 return True
         except Exception as e:
             self._logger.error(f"Health check failed: {e!s}")
