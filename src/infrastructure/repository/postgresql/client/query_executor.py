@@ -22,7 +22,7 @@ class PostgresQueryExecutor(IQueryExecutor):
             self,
             query: str,
             *args
-    ) -> asyncpg.Record:
+    ) -> asyncpg.Record | None:
         async with self._connection_pool.get_connection() as connection:
             return await connection.fetchrow(query, *args)
 

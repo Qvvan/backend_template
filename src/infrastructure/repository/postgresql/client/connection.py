@@ -44,7 +44,7 @@ class PostgresConnectionPool(IDBTransactional):
                 schema='pg_catalog'
             )
 
-        self._pool = await asyncpg.create_pool( # type: ignore[misc]
+        self._pool = await asyncpg.create_pool(
             self.dsn,
             min_size=self.pool_size // 2,
             max_size=self.pool_size,
@@ -52,6 +52,9 @@ class PostgresConnectionPool(IDBTransactional):
             statement_cache_size=self._statement_cache_size,
             init=init_connection
         )
+        if self._pool is None:
+            raise RuntimeError("Failed to create connection pool")
+
         if self.echo:
             self._logger.info(f"Database pool created with {self.pool_size} connections")
 

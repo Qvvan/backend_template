@@ -40,7 +40,14 @@ class IAMQPClient(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def consume(self, queue_name: str, handler: Callable[[dict[str, Any]], Awaitable[None]]) -> None:
+    async def consume(
+            self,
+            queue_name: str,
+            handler: Callable[...],
+            exchange: str | None = None,
+            routing_key: str | None = None,
+            exchange_type: str = ...,
+    ) -> None:
         raise NotImplementedError
 
     @abstractmethod

@@ -82,25 +82,26 @@ class RabbitMQClient(IAMQPClient):
     async def declare_exchange(self, name: str, exchange_type: str = aio_pika.ExchangeType.TOPIC) -> AbstractExchange:
         if not self._channel:
             await self.connect()
-        return await self._channel.declare_exchange(name, aio_pika.ExchangeType(exchange_type), durable=True)
+        ex = self._exchange_cache.get(name)
+        if not ex:
+            ex = await self._channel.declare_exchange(name, aio_pika.ExchangeType(exchange_type), durable=True)
+            self._exchange_cache[name] = ex
+        return ex
 
     async def declare_queue(
             self, name: str, exchange: str, routing_key: str, exchange_type: str = aio_pika.ExchangeType.TOPIC
-    ) -> None:
+    ) -> AbstractQueue:
         if not self._channel:
             await self.connect()
         ex = await self.declare_exchange(exchange, exchange_type=exchange_type)
         queue = await self._channel.declare_queue(name, durable=True)
         await queue.bind(ex, routing_key)
+        return queue
 
     async def publish(self, exchange: str, routing_key: str, payload: dict[str, Any]) -> None:
-        """Публикует сообщение в exchange"""
         if not self._channel:
             await self.connect()
-        ex = self._exchange_cache.get(exchange)
-        if not ex:
-            ex = await self._channel.declare_exchange(exchange, aio_pika.ExchangeType.TOPIC, durable=True)
-            self._exchange_cache[exchange] = ex
+        ex = await self.declare_exchange(exchange)
         message = Message(
             body=json.dumps(payload).encode(),
             content_type="application/json",
@@ -120,8 +121,7 @@ class RabbitMQClient(IAMQPClient):
             await self.connect()
 
         if exchange and routing_key:
-            await self.declare_queue(queue_name, exchange, routing_key, exchange_type)
-            queue = await self._channel.get_queue(queue_name)
+            queue = await self.declare_queue(queue_name, exchange, routing_key, exchange_type)
         else:
             queue = await self._channel.declare_queue(queue_name, durable=True, passive=False)
 
