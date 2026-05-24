@@ -1,7 +1,7 @@
 from typing import Any
 
 from src.core.logger import AppLogger
-from src.infrastructure.messaging.rabbitmq import RabbitMQClient
+from src.interfaces.messaging.client import IAMQPClient
 from src.interfaces.messaging.publisher import IMessagePublisher
 
 
@@ -9,7 +9,7 @@ class MessagePublisher(IMessagePublisher):
     """Общий publisher для всех событий"""
     __slots__ = ("_logger", "_rabbit")
 
-    def __init__(self, rabbit: RabbitMQClient, logger: AppLogger):
+    def __init__(self, rabbit: IAMQPClient, logger: AppLogger):
         self._rabbit = rabbit
         self._logger = logger
 

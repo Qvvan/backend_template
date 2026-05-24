@@ -84,9 +84,7 @@ class PostgresConnectionPool(IDBTransactional):
     async def health_check(self) -> bool:
         try:
             async with asyncio.timeout(5):
-                if self._pool is None:
-                    await self.connect()
-                async with self.get_connection() as conn: # type: ignore[override]
+                async with self.get_connection() as conn:
                     await conn.execute("SELECT 1")
                     return True
         except Exception as e:

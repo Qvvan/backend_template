@@ -1,10 +1,9 @@
-import asyncio
 from abc import ABC, abstractmethod
 
 
 class IConsumer(ABC):
     @abstractmethod
-    async def start(self, stop: asyncio.Event):
+    async def start(self):
         raise NotImplementedError
 
     @abstractmethod

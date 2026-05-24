@@ -1,4 +1,4 @@
-import asyncpg
+from typing import Any
 
 from src.infrastructure.repository.postgresql.client.connection import PostgresConnectionPool
 from src.interfaces.clients.db.query_executor import IQueryExecutor
@@ -14,7 +14,7 @@ class PostgresQueryExecutor(IQueryExecutor):
             self,
             query: str,
             *args
-    ) -> list[asyncpg.Record]:
+    ) -> list:
         async with self._connection_pool.get_connection() as connection:
             return await connection.fetch(query, *args)
 
@@ -22,7 +22,7 @@ class PostgresQueryExecutor(IQueryExecutor):
             self,
             query: str,
             *args
-    ) -> asyncpg.Record | None:
+    ) -> Any | None:
         async with self._connection_pool.get_connection() as connection:
             return await connection.fetchrow(query, *args)
 

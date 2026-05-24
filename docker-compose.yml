@@ -12,13 +12,13 @@ services:
       - "${APP_PORT}:8000"
     env_file:
       - .env
-    depends_on:
-      redis:
-        condition: service_healthy
-      db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+#    depends_on:
+#      redis:
+#        condition: service_healthy
+#      db:
+#        condition: service_healthy
+#      rabbitmq:
+#        condition: service_healthy
     networks:
       - network
 
@@ -26,8 +26,6 @@ services:
     image: postgres:16.2
     container_name: db
     restart: always
-    profiles:
-      - infra
     environment:
       - POSTGRES_DB=${POSTGRES_DATABASE}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -47,8 +45,6 @@ services:
     image: redis/redis-stack:7.4.0-v3
     container_name: redis
     restart: always
-    profiles:
-      - infra
     ports:
       - "6378:6379"
       - "8001:8001"
@@ -67,8 +63,6 @@ services:
     image: rabbitmq:3.13-management
     container_name: rabbitmq
     restart: always
-    profiles:
-      - infra
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
@@ -94,7 +88,7 @@ services:
         EXTRA_GROUP: "--group migrations"
     container_name: migrate
     profiles:
-      - infra
+      - migrate
     command: [ "yoyo", "-vvv", "apply", "--batch", "--database", "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DATABASE}", "./migrations" ]
     env_file:
       - .env

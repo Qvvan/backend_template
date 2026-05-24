@@ -1,3 +1,5 @@
+from typing import Any
+
 import asyncpg
 
 from src.interfaces.clients.db.query_executor import IQueryExecutor
@@ -14,7 +16,7 @@ class PostgresTransactionExecutor(IQueryExecutor):
     async def fetch(self, query, *args) -> list:
         return await self._conn.fetch(query, *args)
 
-    async def fetchrow(self, query: str, *args):
+    async def fetchrow(self, query: str, *args) -> Any | None:
         return await self._conn.fetchrow(query, *args)
 
     async def execute(self, query: str, *args) -> str:

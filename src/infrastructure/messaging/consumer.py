@@ -13,24 +13,20 @@ class BackendConsumer(IConsumer):
         *,
         rabbit: IAMQPClient,
         logger: AppLogger,
+        stop: asyncio.Event,
     ):
         self._rabbit = rabbit
         self._logger = logger
-        self._stop_event = None
+        self._stop_event: asyncio.Event = stop
 
-    async def start(self, stop: asyncio.Event):
-        """Запуск consumer'а с возможностью остановки"""
-        self._stop_event = stop
+    async def start(self) -> None:
         await self.register_consumers()
-
         await self._stop_event.wait()
-
         self._logger.info("Stop signal received, cancelling consumers...")
         await self._rabbit.cancel_consumer()
 
     async def register_consumers(self) -> None:
         """Настройка всех consumers для обработки сообщений"""
-
 
         self._logger.info("Consumer started")
 

@@ -31,11 +31,6 @@ class IAMQPClient(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def declare_exchange(self, name: str, exchange_type: str = "topic"):
-        """Объявляет exchange"""
-        raise NotImplementedError
-
-    @abstractmethod
     async def declare_queue(self, name: str, exchange: str, routing_key: str, exchange_type: str = "topic") -> IQueue:
         """Объявляет очередь и привязывает к exchange"""
         raise NotImplementedError
