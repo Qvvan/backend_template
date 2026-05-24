@@ -89,6 +89,7 @@ class RabbitMQClient(IAMQPClient):
         if self._connection:
             await self._connection.close()
             self._connection = None
+        self._exchange_cache.clear()
 
     async def _declare_exchange(self, name: str, exchange_type: str = aio_pika.ExchangeType.TOPIC) -> AbstractExchange:
         await self._ensure_connected()
@@ -102,8 +103,7 @@ class RabbitMQClient(IAMQPClient):
     async def declare_queue(
             self, name: str, exchange: str, routing_key: str, exchange_type: str = aio_pika.ExchangeType.TOPIC
     ) -> AbstractQueue:
-        if not self._channel:
-            await self.connect()
+        await self._ensure_connected()
         ex = await self._declare_exchange(exchange, exchange_type=exchange_type)
         queue = await self._channel.declare_queue(name, durable=True)
         await queue.bind(ex, routing_key)
