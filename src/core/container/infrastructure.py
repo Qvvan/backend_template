@@ -33,7 +33,7 @@ class InfrastructureContainer:
             host=self._config.redis.HOST,
             port=self._config.redis.PORT,
             db=self._config.redis.DB,
-            password=self._config.redis.PASSWORD,
+            password=self._config.redis.PASSWORD.get_secret_value() if self._config.redis.PASSWORD else None,
             decode_responses=self._config.redis.DECODE_RESPONSES,
             socket_timeout=self._config.redis.SOCKET_TIMEOUT,
             socket_connect_timeout=self._config.redis.SOCKET_CONNECT_TIMEOUT,

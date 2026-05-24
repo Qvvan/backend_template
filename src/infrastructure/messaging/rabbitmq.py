@@ -1,3 +1,4 @@
+import asyncio
 import json
 import ssl
 from collections.abc import Awaitable, Callable
@@ -32,6 +33,7 @@ class RabbitMQClient(IAMQPClient):
         "_tls_enabled",
         "_logger",
         "_url",
+        "_connect_lock",
     )
 
     def __init__(
@@ -57,6 +59,7 @@ class RabbitMQClient(IAMQPClient):
         self._logger = logger
         self._cert_path: str | None = cert_path
         self._prefetch_count: int = 10
+        self._connect_lock = asyncio.Lock()
 
     async def connect(self) -> None:
         """Устанавливает соединение с RabbitMQ"""
@@ -68,6 +71,12 @@ class RabbitMQClient(IAMQPClient):
             self._connection = await aio_pika.connect_robust(self._url)
         self._channel = await self._connection.channel()
         await self._channel.set_qos(prefetch_count=self._prefetch_count)
+
+    async def _ensure_connected(self) -> None:
+        if not self._channel:
+            async with self._connect_lock:
+                if not self._channel:
+                    await self.connect()
 
     def _build_ssl_context(self) -> ssl.SSLContext:
         return ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=self._cert_path)
@@ -82,8 +91,7 @@ class RabbitMQClient(IAMQPClient):
             self._connection = None
 
     async def _declare_exchange(self, name: str, exchange_type: str = aio_pika.ExchangeType.TOPIC) -> AbstractExchange:
-        if not self._channel:
-            await self.connect()
+        await self._ensure_connected()
         cache_key = (name, exchange_type)
         ex = self._exchange_cache.get(cache_key)
         if not ex:
@@ -102,8 +110,7 @@ class RabbitMQClient(IAMQPClient):
         return queue
 
     async def publish(self, exchange: str, routing_key: str, payload: dict[str, Any]) -> None:
-        if not self._channel:
-            await self.connect()
+        await self._ensure_connected()
         ex = await self._declare_exchange(exchange)
         message = Message(
             body=json.dumps(payload).encode(),
@@ -120,8 +127,7 @@ class RabbitMQClient(IAMQPClient):
             routing_key: str | None = None,
             exchange_type: str = aio_pika.ExchangeType.TOPIC,
     ) -> None:
-        if not self._channel:
-            await self.connect()
+        await self._ensure_connected()
 
         if exchange and routing_key:
             queue = await self.declare_queue(queue_name, exchange, routing_key, exchange_type)

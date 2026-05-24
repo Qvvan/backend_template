@@ -50,21 +50,21 @@ class RedisRepository(ICacheRepository):
         return dict(zip(keys, values, strict=True))
 
     async def set_many(
-        self,
-        mapping: dict[str, str],
-        expire: int | None = None,
+            self,
+            mapping: dict[str, str],
+            expire: int | None = None,
     ) -> bool:
-        """Установить несколько значений."""
         if not mapping:
             return True
         if expire is not None:
             async with self._client.pipeline() as pipe:
                 for key, value in mapping.items():
                     pipe.setex(key, expire, value)
-                await pipe.execute()
+                results = await pipe.execute()
+            return all(not isinstance(r, Exception) for r in results)
         else:
             await self._client.mset(mapping)
-        return True
+            return True
 
     async def delete_many(self, keys: list[str]) -> int:
         """Удалить несколько ключей. Возвращает количество удалённых ключей."""

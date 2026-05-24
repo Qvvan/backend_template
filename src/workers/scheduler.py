@@ -25,13 +25,17 @@ class AsyncScheduler:
         }
 
     async def stop_worker(self, name: str) -> None:
-        if name in self.stop_events:
-            self.stop_events[name].set()
-            task = self._tasks.get(name)
-            if task:
+        if name not in self.stop_events:
+            return
+        self.stop_events[name].set()
+        task = self._tasks.get(name)
+        if task:
+            try:
                 await asyncio.shield(task)
-            self._tasks.pop(name, None)
-            self.logger.info(f"Worker {name} stopped")
+            except Exception as e:
+                self.logger.warning(f"Worker {name} raised during stop: {e!s}")
+        self._tasks.pop(name, None)
+        self.logger.info(f"Worker {name} stopped")
 
     async def start_worker(self, name: str) -> None:
         worker = next((w for w in self.workers if w.name == name), None)

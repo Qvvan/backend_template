@@ -59,7 +59,7 @@ class RedisConfig(ConfigBase):
     HOST: str
     PORT: int
     DB: int
-    PASSWORD: str | None = None
+    PASSWORD: SecretStr | None = None
     DECODE_RESPONSES: bool = True
     SOCKET_TIMEOUT: float = 5.0
     SOCKET_CONNECT_TIMEOUT: float = 5.0

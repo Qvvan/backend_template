@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Mapping
 
 from src.infrastructure.repository.postgresql.client.connection import PostgresConnectionPool
 from src.interfaces.clients.db.query_executor import IQueryExecutor
@@ -22,7 +22,7 @@ class PostgresQueryExecutor(IQueryExecutor):
             self,
             query: str,
             *args
-    ) -> Any | None:
+    ) -> Mapping[str, Any] | None:
         async with self._connection_pool.get_connection() as connection:
             return await connection.fetchrow(query, *args)
 

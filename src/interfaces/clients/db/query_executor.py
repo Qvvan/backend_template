@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Mapping
 
 
 class IFetch(ABC):
@@ -10,7 +10,7 @@ class IFetch(ABC):
 
 class IFetchRow(ABC):
     @abstractmethod
-    async def fetchrow(self, query: str, *args) -> Any | None:
+    async def fetchrow(self, query: str, *args) -> Mapping[str, Any] | None:
         raise NotImplementedError
 
 
