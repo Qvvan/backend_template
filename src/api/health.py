@@ -1,0 +1,54 @@
+from fastapi import APIRouter, Depends
+
+from src.api.dependencies import get_postgres_db, get_mysql_db, get_rabbitmq
+from src.interfaces.clients.db.connection import IDBConnector
+from starlette import status
+from starlette.exceptions import HTTPException
+
+from src.interfaces.messaging.rabbitmq import IAMQPClient
+
+router = APIRouter(prefix="/health", tags=["Health"])
+
+@router.get(
+    path="/",
+    status_code=status.HTTP_200_OK,
+    summary="Health check",
+)
+async def health_check():
+    return {
+        "status": "ok",
+    }
+
+
+@router.get(
+    "/postgresql",
+    status_code=status.HTTP_200_OK,
+    summary="PostgreSQL dependency health check",
+)
+async def health_check_postgresql(postgres_db: IDBConnector = Depends(get_postgres_db)):
+    """Проверка доступности Postgres DB."""
+    health_status = await postgres_db.health_check()
+    if not health_status:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Postgres DB is unavailable",
+        )
+
+    return {"status": "ok"}
+
+
+@router.get(
+    "/rabbitmq",
+    status_code=status.HTTP_200_OK,
+    summary="BackendRabbitMQ dependency health check",
+)
+async def health_check_rabbitmq(rabbitmq: IAMQPClient = Depends(get_rabbitmq)):
+    """Проверка доступности BackendRabbitMQ."""
+    health_status = await rabbitmq.health_check()
+    if not health_status:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="BackendRabbitMQ is unavailable",
+        )
+
+    return {"status": "ok"}
