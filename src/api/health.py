@@ -2,11 +2,11 @@ from fastapi import APIRouter, Depends
 
 from src.api.dependencies import get_postgres_db, get_rabbitmq, get_redis
 from src.interfaces.clients.cache_client.client import ICacheDB
-from src.interfaces.clients.db.connection import IDBBase
+from src.interfaces.clients.db.connection import IDBTransactional
 from starlette import status
 from starlette.exceptions import HTTPException
 
-from src.interfaces.messaging.rabbitmq import IAMQPClient
+from src.interfaces.messaging.client import IAMQPClient
 
 router = APIRouter(prefix="/health", tags=["Health"])
 
@@ -26,7 +26,7 @@ async def health_check():
     status_code=status.HTTP_200_OK,
     summary="PostgreSQL dependency health check",
 )
-async def health_check_postgresql(postgres_db: IDBBase = Depends(get_postgres_db)):
+async def health_check_postgresql(postgres_db: IDBTransactional = Depends(get_postgres_db)):
     """Проверка доступности Postgres DB."""
     health_status = await postgres_db.health_check()
     if not health_status:
@@ -60,7 +60,7 @@ async def health_check_rabbitmq(rabbitmq: IAMQPClient = Depends(get_rabbitmq)):
     summary="Redis dependency health check",
 )
 async def health_check_redis(redis: ICacheDB = Depends(get_redis)):
-    """Проверка доступности BackendRabbitMQ."""
+    """Проверка доступности Redis."""
     health_status = await redis.health_check()
     if not health_status:
         raise HTTPException(

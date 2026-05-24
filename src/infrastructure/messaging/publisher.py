@@ -14,5 +14,5 @@ class MessagePublisher(IMessagePublisher):
         self._logger = logger
 
     async def publish(self, exchange: str, routing_key: str, payload: dict[str, Any]) -> None:
-        """Публикует событие об успешном расчете опроса"""
+        """Публикует событие"""
         await self._rabbit.publish(exchange=exchange, routing_key=routing_key, payload=payload)

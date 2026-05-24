@@ -47,8 +47,8 @@ class InfrastructureContainer:
             host=self._config.rabbitmq.HOST,
             port=self._config.rabbitmq.PORT,
             vhost=self._config.rabbitmq.VHOST,
-            ssl_context=self._config.rabbitmq.SSL_CONTEXT,
-            sert_path=self._config.rabbitmq.SERT_PATH,
+            tls_enabled=self._config.rabbitmq.TLS_ENABLED,
+            cert_path=self._config.rabbitmq.CERT_PATH,
             logger=self._logger,
         )
 
@@ -61,6 +61,9 @@ class InfrastructureContainer:
         return PostgresUnitOfWork(pool=self.postgres_db)
 
     async def close(self) -> None:
-        await self.postgres_db.close()
-        await self.redis_db.close()
-        await self.rabbitmq.close()
+        if "postgres_db" in self.__dict__:
+            await self.postgres_db.close()
+        if "redis_db" in self.__dict__:
+            await self.redis_db.close()
+        if "rabbitmq" in self.__dict__:
+            await self.rabbitmq.close()

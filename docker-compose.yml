@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: api
-    restart: always
+    restart: on-failure
     profiles:
       - app
     entrypoint: ["granian", "--interface", "asgi", "--factory", "--loop", "uvloop", "--host", "0.0.0.0", "--workers", "1", "src.main:create_app"]
@@ -44,7 +44,7 @@ services:
       - network
 
   redis:
-    image: redis/redis-stack:latest
+    image: redis/redis-stack:7.4.0-v3
     container_name: redis
     restart: always
     profiles:

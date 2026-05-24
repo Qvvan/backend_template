@@ -16,7 +16,7 @@ from aio_pika.abc import (
 )
 
 from src.core.logger import AppLogger
-from src.interfaces.messaging.rabbitmq import IAMQPClient
+from src.interfaces.messaging.client import IAMQPClient
 
 
 class RabbitMQClient(IAMQPClient):
@@ -28,8 +28,8 @@ class RabbitMQClient(IAMQPClient):
         "_exchange_cache",
         "_prefetch_count",
         "_queue_list",
-        "_sert_path",
-        "_ssl_context",
+        "_cert_path",
+        "_tls_enabled",
         "_logger",
         "_url",
     )
@@ -42,26 +42,26 @@ class RabbitMQClient(IAMQPClient):
         host: str,
         port: int,
         vhost: str,
-        ssl_context: bool,
-        sert_path: str | None = None,
+        tls_enabled: bool,
+        cert_path: str | None = None,
     ) -> None:
         protocol = "amqp"
-        if ssl_context:
+        if tls_enabled:
             protocol = "amqps"
         self._url = f"{protocol}://{user}:{quote_plus(password)}@{host}:{port}/{vhost}"
         self._connection: AbstractConnection | None = None
         self._channel: AbstractChannel | None = None
         self._exchange_cache: dict[str, AbstractExchange] = {}
         self._queue_list: dict[AbstractQueue, ConsumerTag] = {}
-        self._ssl_context: bool = ssl_context
+        self._tls_enabled: bool = tls_enabled
         self._logger = logger
-        self._sert_path: str | None = sert_path
+        self._cert_path: str | None = cert_path
         self._prefetch_count: int = 10
 
     async def connect(self) -> None:
         """Устанавливает соединение с RabbitMQ"""
 
-        if self._ssl_context:
+        if self._tls_enabled:
             ssl_cnt = self._build_ssl_context()
             self._connection = await aio_pika.connect_robust(self._url, ssl_context=ssl_cnt)
         else:
@@ -70,7 +70,7 @@ class RabbitMQClient(IAMQPClient):
         await self._channel.set_qos(prefetch_count=self._prefetch_count)
 
     def _build_ssl_context(self) -> ssl.SSLContext:
-        return ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=self._sert_path)
+        return ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=self._cert_path)
 
     async def close(self) -> None:
         """Закрывает соединение"""
@@ -108,12 +108,22 @@ class RabbitMQClient(IAMQPClient):
         )
         await ex.publish(message, routing_key=routing_key)
 
-    async def consume(self, queue_name: str, handler: Callable[[dict[str, Any]], Awaitable[None]]):
-        """Запускает потребление сообщений из очереди и возвращает consumer_tag"""
+    async def consume(
+            self,
+            queue_name: str,
+            handler: Callable[[dict[str, Any]], Awaitable[None]],
+            exchange: str | None = None,
+            routing_key: str | None = None,
+            exchange_type: str = aio_pika.ExchangeType.TOPIC,
+    ) -> None:
         if not self._channel:
             await self.connect()
 
-        queue = await self._channel.get_queue(queue_name)
+        if exchange and routing_key:
+            await self.declare_queue(queue_name, exchange, routing_key, exchange_type)
+            queue = await self._channel.get_queue(queue_name)
+        else:
+            queue = await self._channel.declare_queue(queue_name, durable=True, passive=False)
 
         async def on_message(message: AbstractIncomingMessage) -> None:
             async with message.process():

@@ -4,7 +4,7 @@ from src.core.container import Container
 from src.interfaces.clients.cache_client.client import ICacheDB
 from src.interfaces.clients.db.connection import IDBTransactional
 
-from src.interfaces.messaging.rabbitmq import IAMQPClient
+from src.interfaces.messaging.client import IAMQPClient
 
 
 def get_container(request: Request) -> Container:

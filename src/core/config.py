@@ -48,8 +48,8 @@ class RabbitMQConfig(ConfigBase):
     USER: str
     PASSWORD: SecretStr
     VHOST: str
-    SSL_CONTEXT: bool
-    SERT_PATH: str
+    TLS_ENABLED: bool
+    CERT_PATH: str | None = None
 
 
 class RedisConfig(ConfigBase):

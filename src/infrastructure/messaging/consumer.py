@@ -2,7 +2,7 @@ import asyncio
 
 from src.core.logger import AppLogger
 from src.interfaces.messaging.consumer import IConsumer
-from src.interfaces.messaging.rabbitmq import IAMQPClient
+from src.interfaces.messaging.client import IAMQPClient
 
 
 class BackendConsumer(IConsumer):

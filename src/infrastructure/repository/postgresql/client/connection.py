@@ -10,7 +10,7 @@ from src.interfaces.clients.db.connection import IDBTransactional
 
 
 class PostgresConnectionPool(IDBTransactional):
-    __slots__ = ("_logger", "_pool", "dsn", "echo", "pool_size")
+    __slots__ = ("_logger", "_pool", "dsn", "echo", "pool_size", "_command_timeout", "_statement_cache_size")
 
     def __init__(
         self,
@@ -23,11 +23,15 @@ class PostgresConnectionPool(IDBTransactional):
         database: str,
         echo: bool = False,
         pool_size: int = 5,
+        command_timeout: int = 10,
+        statement_cache_size: int = 256,
     ):
         self.dsn = f"postgresql://{user}:{quote_plus(password)}@{host}:{port}/{database}"
         self.echo = echo
         self.pool_size = pool_size
         self._logger = logger
+        self._command_timeout = command_timeout
+        self._statement_cache_size = statement_cache_size
         self._pool: asyncpg.Pool | None = None
 
     async def connect(self) -> None:
@@ -44,8 +48,8 @@ class PostgresConnectionPool(IDBTransactional):
             self.dsn,
             min_size=self.pool_size // 2,
             max_size=self.pool_size,
-            command_timeout=10,
-            statement_cache_size=1024,
+            command_timeout=self._command_timeout,
+            statement_cache_size=self._statement_cache_size,
             init=init_connection
         )
         if self.echo:
@@ -61,7 +65,7 @@ class PostgresConnectionPool(IDBTransactional):
 
     @asynccontextmanager
     async def transaction(self) -> AsyncGenerator[PostgresTransactionExecutor, None]:
-        async with self.get_connection() as conn:
+        async with self.get_connection() as conn: # type: ignore[override]
             async with conn.transaction():
                 yield PostgresTransactionExecutor(conn)
 
@@ -75,7 +79,7 @@ class PostgresConnectionPool(IDBTransactional):
         try:
             if self._pool is None:
                 await asyncio.wait_for(self.connect(), 3)
-            async with self.get_connection() as conn:
+            async with self.get_connection() as conn: # type: ignore[override]
                 await conn.execute("SELECT 1")
                 return True
         except Exception as e:

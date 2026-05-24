@@ -16,7 +16,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.logger = logger
 
-    async def dispatch(self, request: Request, call_next) -> Response | None:
+    async def dispatch(self, request: Request, call_next) -> Response:
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
         AppLogger.set_request_id(request_id)

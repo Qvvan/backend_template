@@ -21,9 +21,7 @@ class AsyncScheduler:
     def _register_tasks(self):
         self._tasks = [
             asyncio.create_task(
-                w.start(
-                    self.stop_events.get(w.name)
-                )
+                w.start(self.stop_events[w.name])
             )
             for w in self.workers
         ]

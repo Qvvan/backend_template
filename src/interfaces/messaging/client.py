@@ -1,4 +1,3 @@
-import ssl
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from enum import StrEnum
@@ -6,10 +5,10 @@ from typing import Any
 
 
 class AMQPExchangeType(StrEnum):
-    Direct: str = "direct"
-    Fanout: str = "fanout"
-    Topic: str = "topic"
-    Headers: str = "headers"
+    Direct = "direct"
+    Fanout = "fanout"
+    Topic = "topic"
+    Headers = "headers"
 
 
 class IAMQPClient(ABC):
@@ -51,5 +50,5 @@ class IAMQPClient(ABC):
 
     @abstractmethod
     async def health_check(self) -> bool:
-        """За двумя зайцами погонишься, ни одного не поймаешь, проверка не убежал ли наш заяц?"""
+        """Проверка жив ли брокер сообщений"""
         raise NotImplementedError

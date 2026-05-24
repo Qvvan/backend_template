@@ -1,18 +1,20 @@
-from src.infrastructure.repository.postgresql.client.connection import PostgresConnectionPool
+import asyncpg
+
+from src.interfaces.clients.db.connection import IDBTransactional
 from src.interfaces.clients.db.query_executor import IQueryExecutor
 
 
 class PostgresQueryExecutor(IQueryExecutor):
     __slots__ = ["_connection_pool"]
 
-    def __init__(self, connection_pool: PostgresConnectionPool):
+    def __init__(self, connection_pool: IDBTransactional):
         self._connection_pool = connection_pool
 
     async def fetch(
             self,
-            query,
+            query: str,
             *args
-    ) -> list:
+    ) -> list[asyncpg.Record]:
         async with self._connection_pool.get_connection() as connection:
             return await connection.fetch(query, *args)
 
@@ -20,7 +22,7 @@ class PostgresQueryExecutor(IQueryExecutor):
             self,
             query: str,
             *args
-    ):
+    ) -> asyncpg.Record:
         async with self._connection_pool.get_connection() as connection:
             return await connection.fetchrow(query, *args)
 
