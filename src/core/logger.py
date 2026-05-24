@@ -13,7 +13,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, UTC).isoformat(),
             "level": record.levelname,
             "message": record.getMessage(),
             "request_id": getattr(record, "request_id", None),
@@ -38,26 +38,21 @@ class JsonFormatter(logging.Formatter):
 class AppLogger:
     """Simple JSON-only application logger."""
 
-    _logger: logging.Logger | None = None
-    _configured: bool = False
-
     def __init__(self, level: str = "INFO"):
         self.level = level.upper()
-        self._configure()
+        self._logger = self._configure()
 
-    def _configure(self) -> None:
+    def _configure(self) -> logging.Logger:
         logger = logging.getLogger("app")
         logger.setLevel(self.level)
         logger.propagate = False
 
-        if not AppLogger._configured:
+        if not logger.handlers:
             handler = logging.StreamHandler(sys.stdout)
             handler.setFormatter(JsonFormatter())
-            logger.handlers.clear()
             logger.addHandler(handler)
-            AppLogger._configured = True
 
-        AppLogger._logger = logger
+        return logger
 
     @classmethod
     def set_request_id(cls, request_id: str) -> None:
@@ -69,9 +64,7 @@ class AppLogger:
 
     @classmethod
     def _get_logger(cls) -> logging.Logger:
-        if cls._logger is None:
-            cls()
-        return cls._logger  # type: ignore[return-value]
+        return logging.getLogger("app")
 
     @staticmethod
     def _extra(fields: dict[str, Any]) -> dict[str, Any]:

@@ -1,6 +1,6 @@
 import redis.asyncio as aioredis
 
-from src.interfaces.clients.cache.client import ICacheDB
+from src.interfaces.clients.cache_client.client import ICacheDB
 
 
 class RedisDB(ICacheDB):

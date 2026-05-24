@@ -58,12 +58,12 @@ class RabbitMQConfig(ConfigBase):
     USER: str
     PASSWORD: SecretStr
     VHOST: str
-    SSLCONTEXT: bool
+    SSL_CONTEXT: bool
     SERT_PATH: str
 
 
 class RedisConfig(ConfigBase):
-    """Redis cache settings"""
+    """Redis cache_client settings"""
     model_config = SettingsConfigDict(env_prefix="REDIS_", frozen=True)
 
     HOST: str

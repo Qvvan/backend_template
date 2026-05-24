@@ -19,7 +19,7 @@ class AsyncScheduler:
         self._stop = asyncio.Event()
         self._tasks: list[asyncio.Task[None]] = []
 
-    async def _register_tasks(self):
+    def _register_tasks(self):
         self._tasks = [
             asyncio.create_task(
                 w.start(
@@ -69,10 +69,7 @@ class AsyncScheduler:
         await self._stop_workers()
 
         try:
-            await asyncio.wait_for(
-                self.wait_until_done(),
-                timeout=30.0
-            )
+            self.wait_until_done(),
             self.logger.info("All workers stopped gracefully")
         except TimeoutError:
             self.logger.warning("Some workers didn't stop gracefully, cancelling...")

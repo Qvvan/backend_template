@@ -1,7 +1,7 @@
 from fastapi import Request
 
 from src.core.container import Container
-from src.interfaces.clients.cache.client import ICacheDB
+from src.interfaces.clients.cache_client.client import ICacheDB
 from src.interfaces.clients.db.connection import IDBConnector
 
 from src.interfaces.messaging.rabbitmq import IAMQPClient

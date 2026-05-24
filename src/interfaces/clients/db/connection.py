@@ -3,19 +3,28 @@ from contextlib import AbstractAsyncContextManager
 from typing import Any
 
 
-class IDBConnector(ABC):
-    @abstractmethod
-    async def connect(self) -> None:
-        raise NotImplementedError
+class IDBBase(ABC):
+    """Базовый интерфейс — обязателен для всех БД."""
 
     @abstractmethod
-    def get_connection(self) -> AbstractAsyncContextManager[Any]:
-        raise NotImplementedError
+    async def connect(self) -> None: ...
 
     @abstractmethod
-    async def close(self) -> None:
-        raise NotImplementedError
+    async def close(self) -> None: ...
 
     @abstractmethod
-    async def health_check(self) -> bool:
-        raise NotImplementedError
+    async def health_check(self) -> bool: ...
+
+
+class IDBConnectable(IDBBase, ABC):
+    """Для БД с поддержкой соединений."""
+
+    @abstractmethod
+    def get_connection(self) -> AbstractAsyncContextManager[Any]: ...
+
+
+class IDBTransactional(IDBConnectable, ABC):
+    """Для БД с поддержкой транзакций."""
+
+    @abstractmethod
+    def transaction(self) -> AbstractAsyncContextManager[Any]: ...

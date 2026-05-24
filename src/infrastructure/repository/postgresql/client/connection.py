@@ -6,10 +6,10 @@ import asyncpg
 
 from src.core.logger import AppLogger
 from src.infrastructure.repository.postgresql.client.transaction_executor import PostgresTransactionExecutor
-from src.interfaces.clients.db.connection import IDBConnector
+from src.interfaces.clients.db.connection import IDBTransactional
 
 
-class PostgresConnectionPool(IDBConnector):
+class PostgresConnectionPool(IDBTransactional):
     __slots__ = ["_logger", "_pool", "dsn", "echo", "pool_size"]
 
     def __init__(

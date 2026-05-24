@@ -1,7 +1,6 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.responses import ORJSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from src.api import router
@@ -18,7 +17,7 @@ async def lifespan(app: FastAPI):
 
     container = app.state.container  # type: ignore
 
-    await container.async_scheduler.startup()
+    await container.workers.start()
 
     yield
 
@@ -35,8 +34,6 @@ def create_app() -> FastAPI:
         description="API",
         version="1.0.0",
         lifespan=lifespan,
-        root_path="/health",
-        default_response_class=ORJSONResponse,
         docs_url="/docs" if cfg.app.DEBUG else None,
         redoc_url="/redoc" if cfg.app.DEBUG else None,
         openapi_url="/openapi.json" if cfg.app.DEBUG else None,
@@ -47,7 +44,6 @@ def create_app() -> FastAPI:
         allow_origins=cfg.app.CORS_ORIGINS,
         allow_methods=["*"],
         allow_headers=["*"],
-        allow_credentials=True,
     )
 
     app.add_middleware(
@@ -63,6 +59,3 @@ def create_app() -> FastAPI:
     app.state.container = container  #type: ignore
 
     return app
-
-
-create_app()

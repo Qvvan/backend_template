@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: api
     restart: always
+    entrypoint: ["granian", "--interface", "asgi", "--factory", "--loop", "uvloop", "--host", "0.0.0.0", "--workers", "1", "src.main:create_app"]
     ports:
       - "${APP_PORT}:8000"
     env_file:
@@ -19,6 +20,94 @@ services:
     networks:
       - network
 
+  db:
+    image: postgres:16.2
+    container_name: db
+    restart: always
+    profiles:
+      - infra
+    environment:
+      - POSTGRES_DB=${POSTGRES_DATABASE}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DATABASE}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - network
+
+  redis:
+    image: redis/redis-stack:latest
+    container_name: redis
+    restart: always
+    profiles:
+      - infra
+    ports:
+      - "6378:6379"
+      - "8001:8001"
+    volumes:
+      - redis_storage:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-h", "localhost", "-p", "6379", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - network
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq
+    restart: always
+    profiles:
+      - infra
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST}
+    ports:
+      - "5672:5672"    # AMQP порт
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - network
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        EXTRA_GROUP: "--group migrations"
+    container_name: migrate
+    command: [ "yoyo", "apply", "--batch", "--database", "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DATABASE}", "./migrations" ]
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - network
+
 networks:
   network:
     driver: bridge
+
+volumes:
+  redis_storage:
+    driver: local
+  postgres_data:
+    driver: local
+  rabbitmq_data:
+    driver: local

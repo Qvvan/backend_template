@@ -1,6 +1,6 @@
 import redis.asyncio as aioredis
 
-from src.interfaces.clients.cache.repository import ICacheRepository
+from src.interfaces.clients.cache_client.repository import ICacheRepository
 
 
 class RedisRepository(ICacheRepository):
@@ -81,8 +81,7 @@ class RedisRepository(ICacheRepository):
         return await self._client.decrby(key, amount)
 
     async def keys(self, pattern: str = "*") -> list[str]:
-        """Получить список ключей по паттерну."""
-        return await self._client.keys(pattern)
+        return [key async for key in self._client.scan_iter(pattern)]
 
     async def flush_db(self) -> bool:
         """Очистить текущую базу данных."""

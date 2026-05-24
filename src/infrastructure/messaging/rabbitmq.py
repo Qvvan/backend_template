@@ -30,7 +30,7 @@ class RabbitMQClient(IAMQPClient):
         "_queue_list",
         "_sert_path",
         "_ssl_context",
-        "_logger"
+        "_logger",
         "_url",
     )
 

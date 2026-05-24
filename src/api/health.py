@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
-from src.api.dependencies import get_postgres_db, get_mysql_db, get_rabbitmq
-from src.interfaces.clients.db.connection import IDBConnector
+from src.api.dependencies import get_postgres_db, get_rabbitmq
+from src.interfaces.clients.db.connection import IDBBase
 from starlette import status
 from starlette.exceptions import HTTPException
 
@@ -25,7 +25,7 @@ async def health_check():
     status_code=status.HTTP_200_OK,
     summary="PostgreSQL dependency health check",
 )
-async def health_check_postgresql(postgres_db: IDBConnector = Depends(get_postgres_db)):
+async def health_check_postgresql(postgres_db: IDBBase = Depends(get_postgres_db)):
     """Проверка доступности Postgres DB."""
     health_status = await postgres_db.health_check()
     if not health_status:

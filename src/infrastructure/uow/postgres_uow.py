@@ -1,10 +1,11 @@
 from contextlib import asynccontextmanager
 
-from src.infrastructure.repository.postgresql.client.connection import PostgresConnectionPool
 from src.infrastructure.uow.transaction_session import TransactionSession
+from src.interfaces.clients.db.connection import IDBTransactional
+from src.interfaces.clients.db.uow import IUnitOfWork
 
 
-class PostgresUnitOfWork:
+class PostgresUnitOfWork(IUnitOfWork):
     """
     Generic transaction manager for PostgreSQL.
     begin() opens one connection, starts a transaction, and yields a
@@ -12,7 +13,7 @@ class PostgresUnitOfWork:
     Commits on clean exit, rolls back on any exception.
     """
 
-    def __init__(self, pool: PostgresConnectionPool) -> None:
+    def __init__(self, pool: IDBTransactional) -> None:
         self._pool = pool
 
     @asynccontextmanager
