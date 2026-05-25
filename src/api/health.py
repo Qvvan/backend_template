@@ -17,7 +17,7 @@ router = APIRouter(prefix="/health", tags=["Health"])
     status_code=status.HTTP_200_OK,
     summary="Health check",
 )
-async def health_check():
+async def health_check() -> dict[str, str]:
     return {
         "status": "ok",
     }
@@ -28,7 +28,7 @@ async def health_check():
     status_code=status.HTTP_200_OK,
     summary="PostgreSQL dependency health check",
 )
-async def health_check_postgresql(postgres_db: IDBTransactional = Depends(get_postgres_db)):
+async def health_check_postgresql(postgres_db: IDBTransactional = Depends(get_postgres_db)) -> dict[str, str]:
     """Проверка доступности Postgres DB."""
     health_status = await postgres_db.health_check()
     if not health_status:
@@ -45,7 +45,7 @@ async def health_check_postgresql(postgres_db: IDBTransactional = Depends(get_po
     status_code=status.HTTP_200_OK,
     summary="BackendRabbitMQ dependency health check",
 )
-async def health_check_rabbitmq(rabbitmq: IAMQPClient = Depends(get_rabbitmq)):
+async def health_check_rabbitmq(rabbitmq: IAMQPClient = Depends(get_rabbitmq)) -> dict[str, str]:
     """Проверка доступности BackendRabbitMQ."""
     health_status = await rabbitmq.health_check()
     if not health_status:
@@ -61,7 +61,7 @@ async def health_check_rabbitmq(rabbitmq: IAMQPClient = Depends(get_rabbitmq)):
     status_code=status.HTTP_200_OK,
     summary="Redis dependency health check",
 )
-async def health_check_redis(redis: ICacheDB = Depends(get_redis)):
+async def health_check_redis(redis: ICacheDB = Depends(get_redis)) -> dict[str, str]:
     """Проверка доступности Redis."""
     health_status = await redis.health_check()
     if not health_status:

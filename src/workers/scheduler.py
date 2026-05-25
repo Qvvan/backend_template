@@ -20,7 +20,7 @@ class AsyncScheduler:
         }
         self._tasks: dict[str, asyncio.Task[None]] = {}
 
-    def _register_tasks(self):
+    def _register_tasks(self) -> None:
         self._tasks = {
             w.name: asyncio.create_task(w.start(self.stop_events[w.name]))
             for w in self.workers
@@ -48,7 +48,7 @@ class AsyncScheduler:
         self._tasks[name] = asyncio.create_task(worker.start(self.stop_events[name]))
         self.logger.info("Worker started", worker_name=name)
 
-    async def _stop_workers(self):
+    async def _stop_workers(self) -> None:
         """Останавливаем всех воркеров через их события"""
         for w in self.workers:
             if w.name in self.stop_events:
@@ -66,7 +66,7 @@ class AsyncScheduler:
         fut = asyncio.gather(*self._tasks.values(), return_exceptions=True)
         await asyncio.wait_for(fut=fut, timeout=30.0)
 
-    async def shutdown(self):
+    async def shutdown(self) -> None:
         self.logger.info("Shutting down scheduler...")
         await self._stop_workers()
 

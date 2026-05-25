@@ -9,7 +9,7 @@ from src.interfaces.clients.db.query_executor import IQueryExecutor
 class PostgresQueryExecutor(IQueryExecutor):
     __slots__ = ("_connection_pool",)
 
-    def __init__(self, connection_pool: PostgresConnectionPool):
+    def __init__(self, connection_pool: PostgresConnectionPool) -> None:
         self._connection_pool = connection_pool
 
     async def fetch(

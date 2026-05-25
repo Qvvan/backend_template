@@ -37,7 +37,7 @@ class PostgresConnectionPool(IDBTransactional):
             pool_size: int = 5,
             command_timeout: int = 10,
             statement_cache_size: int = 256,
-    ):
+    ) -> None:
         self._dsn = f"postgresql://{user}:{quote_plus(password)}@{host}:{port}/{database}"
         self._echo = echo
         self._pool_size = pool_size

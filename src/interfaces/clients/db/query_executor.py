@@ -6,19 +6,19 @@ from typing import Any, Mapping
 
 class IFetch(ABC):
     @abstractmethod
-    async def fetch(self, query: str, *args) -> list[Mapping[str, Any]]:
+    async def fetch(self, query: str, *args: Any) -> list[Mapping[str, Any]]:
         raise NotImplementedError
 
 
 class IFetchRow(ABC):
     @abstractmethod
-    async def fetchrow(self, query: str, *args) -> Mapping[str, Any] | None:
+    async def fetchrow(self, query: str, *args: Any) -> Mapping[str, Any] | None:
         raise NotImplementedError
 
 
 class IExecutor(ABC):
     @abstractmethod
-    async def execute(self, query: str, *args) -> str:
+    async def execute(self, query: str, *args: Any) -> str:
         raise NotImplementedError
 
 

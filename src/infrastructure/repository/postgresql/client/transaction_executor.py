@@ -12,7 +12,7 @@ class PostgresTransactionExecutor(IQueryExecutor):
 
     __slots__ = ("_conn",)
 
-    def __init__(self, conn: asyncpg.Connection):
+    def __init__(self, conn: asyncpg.Connection) -> None:
         self._conn = conn
 
     async def fetch(self, query, *args: Any) -> list[Mapping[str, Any]]:

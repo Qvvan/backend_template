@@ -16,7 +16,7 @@ class BackendConsumer(IConsumer):
         rabbit: IAMQPClient,
         logger: AppLogger,
         stop: asyncio.Event,
-    ):
+    ) -> None:
         self._rabbit = rabbit
         self._logger = logger
         self._stop_event: asyncio.Event = stop

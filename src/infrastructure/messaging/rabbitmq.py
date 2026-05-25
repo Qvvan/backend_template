@@ -156,6 +156,7 @@ class RabbitMQClient(IAMQPClient):
     async def cancel_consumer(self) -> None:
         for queue, consumer_tag in list(self._queue_list.items()):
             await queue.cancel(consumer_tag)
+        self._queue_list.clear()
 
     async def health_check(self) -> bool:
         if self._connection is None or self._connection.is_closed:

@@ -1,20 +1,21 @@
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.cors import CORSMiddleware
 
 from src.api import router
 from src.api.exception_handlers import register_errors
-from prometheus_fastapi_instrumentator import Instrumentator
 from src.api.middleware.request_logging import RequestLoggingMiddleware
 from src.core.config import Config
 from src.core.container import Container
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Управление жизненным циклом приложения."""
 
     container = app.state.container  # type: ignore
@@ -42,14 +43,14 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(
-        CORSMiddleware,  #type: ignore
+        CORSMiddleware,  # type: ignore
         allow_origins=cfg.app.CORS_ORIGINS,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
     app.add_middleware(
-        RequestLoggingMiddleware,  #type: ignore
+        RequestLoggingMiddleware,  # type: ignore
         logger=container.logger,
     )
 
@@ -58,6 +59,6 @@ def create_app() -> FastAPI:
 
     Instrumentator().instrument(app).expose(app)
 
-    app.state.container = container  #type: ignore
+    app.state.container = container  # type: ignore
 
     return app

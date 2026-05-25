@@ -16,14 +16,14 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app: ASGIApp, logger: AppLogger) -> None:
         super().__init__(app)
-        self.logger = logger
+        self._logger = logger
 
     async def dispatch(self, request: Request, call_next) -> Response:
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
         AppLogger.set_request_id(request_id)
 
-        self.logger.info(
+        self._logger.info(
             "Incoming request",
             type="request",
             request_id=request_id,
@@ -39,7 +39,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             duration_ms = (time.perf_counter() - start_time) * 1000
         except Exception as exc:
             duration_ms = (time.perf_counter() - start_time) * 1000
-            self.logger.error(
+            self._logger.error(
                 "Outgoing response failed",
                 type="response",
                 request_id=request_id,
@@ -51,7 +51,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             raise
         else:
             response.headers["X-Request-ID"] = request_id
-            self.logger.info(
+            self._logger.info(
                 "Outgoing response",
                 type="response",
                 request_id=request_id,

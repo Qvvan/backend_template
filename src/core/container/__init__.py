@@ -9,11 +9,6 @@ from src.core.logger import AppLogger
 
 
 class Container:
-    """
-    Собирает подконтейнеры и предоставляет общий логгер и shutdown.
-
-    """
-
     __slots__ = ("config", "infra", "logger", "repos", "services", "workers")
 
     def __init__(self, config: Config) -> None:
