@@ -38,12 +38,12 @@ class JsonFormatter(logging.Formatter):
 
 
 class AppLogger:
-    __slots__ = ("level", "_logger")
+    __slots__ = ("_level", "_logger")
 
     def __init__(self, level: str = "INFO") -> None:
-        self.level = level.upper()
+        self._level = level.upper()
         self._logger = logging.getLogger("app")
-        self._logger.setLevel(self.level)
+        self._logger.setLevel(self._level)
         self._logger.propagate = False
 
         if not self._logger.handlers:

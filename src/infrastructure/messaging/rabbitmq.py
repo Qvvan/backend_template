@@ -82,6 +82,7 @@ class RabbitMQClient(IAMQPClient):
             async with self._connect_lock:
                 if not self._channel:
                     await self.connect()
+        assert self._channel is not None
 
     def _build_ssl_context(self) -> ssl.SSLContext:
         return ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=self._cert_path)

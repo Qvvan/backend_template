@@ -9,10 +9,10 @@ from src.core.logger import AppLogger
 
 
 class Container:
-    __slots__ = ("config", "infra", "logger", "repos", "services", "workers")
+    __slots__ = ("_config", "infra", "logger", "repos", "services", "workers")
 
     def __init__(self, config: Config) -> None:
-        self.config = config
+        self._config = config
         self.logger = AppLogger(level=config.logging.LEVEL)
         self.infra = InfrastructureContainer(config, self.logger)
         self.repos = RepositoryContainer(self.infra)

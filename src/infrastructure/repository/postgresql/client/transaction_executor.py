@@ -15,7 +15,7 @@ class PostgresTransactionExecutor(IQueryExecutor):
     def __init__(self, conn: asyncpg.Connection) -> None:
         self._conn = conn
 
-    async def fetch(self, query, *args: Any) -> list[Mapping[str, Any]]:
+    async def fetch(self, query: str, *args: Any) -> list[Mapping[str, Any]]:
         return await self._conn.fetch(query, *args)
 
     async def fetchrow(self, query: str, *args: Any) -> Mapping[str, Any] | None:

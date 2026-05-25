@@ -3,62 +3,63 @@ from __future__ import annotations
 import asyncio
 
 from src.core.logger import AppLogger
-
 from src.interfaces.workers.worker import IWorker
 
 
 class AsyncScheduler:
+    __slots__ = ("_logger", "_workers", "_stop_events", "_tasks")
+
     def __init__(
             self,
             logger: AppLogger,
             workers: list[IWorker],
     ) -> None:
-        self.logger = logger
-        self.workers = workers
-        self.stop_events: dict[str, asyncio.Event] = {
+        self._logger = logger
+        self._workers = workers
+        self._stop_events: dict[str, asyncio.Event] = {
             w.name: asyncio.Event() for w in workers
         }
         self._tasks: dict[str, asyncio.Task[None]] = {}
 
     def _register_tasks(self) -> None:
         self._tasks = {
-            w.name: asyncio.create_task(w.start(self.stop_events[w.name]))
-            for w in self.workers
+            w.name: asyncio.create_task(w.start(self._stop_events[w.name]))
+            for w in self._workers
         }
 
     async def stop_worker(self, name: str) -> None:
-        if name not in self.stop_events:
+        if name not in self._stop_events:
             return
-        self.stop_events[name].set()
+        self._stop_events[name].set()
         task = self._tasks.get(name)
         if task:
             try:
                 await asyncio.shield(task)
             except Exception as e:
-                self.logger.warning("Worker raised during stop", worker_name=name, error=e)
+                self._logger.warning("Worker raised during stop", worker_name=name, error=e)
         self._tasks.pop(name, None)
-        self.logger.info("Worker stopped", worker_name=name)
+        self._logger.info("Worker stopped", worker_name=name)
 
     async def start_worker(self, name: str) -> None:
-        worker = next((w for w in self.workers if w.name == name), None)
+        worker = next((w for w in self._workers if w.name == name), None)
         if not worker:
             return
 
-        self.stop_events[name] = asyncio.Event()
-        self._tasks[name] = asyncio.create_task(worker.start(self.stop_events[name]))
-        self.logger.info("Worker started", worker_name=name)
+        self._stop_events[name] = asyncio.Event()
+        self._tasks[name] = asyncio.create_task(worker.start(self._stop_events[name]))
+        self._logger.info("Worker started", worker_name=name)
 
     async def _stop_workers(self) -> None:
         """Останавливаем всех воркеров через их события"""
-        for w in self.workers:
-            if w.name in self.stop_events:
-                self.stop_events[w.name].set()
-                self.logger.info("Stop signal sent to", worker_name=w.name)
+        for w in self._workers:
+            if w.name in self._stop_events:
+                self._stop_events[w.name].set()
+                self._logger.info("Stop signal sent to", worker_name=w.name)
 
     def start(self) -> None:
-        self.logger.info("Scheduler starting workers...")
+        self._logger.info("Scheduler starting workers...")
         self._register_tasks()
-        self.logger.info("Scheduler started workers", count_workers=len(self._tasks))
+        self._logger.info("Scheduler started workers", count_workers=len(self._tasks))
 
     async def wait_until_done(self) -> None:
         if not self._tasks:
@@ -67,16 +68,16 @@ class AsyncScheduler:
         await asyncio.wait_for(fut=fut, timeout=30.0)
 
     async def shutdown(self) -> None:
-        self.logger.info("Shutting down scheduler...")
+        self._logger.info("Shutting down scheduler...")
         await self._stop_workers()
 
         try:
             await self.wait_until_done()
-            self.logger.info("All workers stopped gracefully")
+            self._logger.info("All workers stopped gracefully")
         except asyncio.TimeoutError:
-            self.logger.warning("Some workers didn't stop gracefully, cancelling...")
+            self._logger.warning("Some workers didn't stop gracefully, cancelling...")
             for task in self._tasks.values():
                 if not task.done():
                     task.cancel()
             await asyncio.gather(*self._tasks.values(), return_exceptions=True)
-            self.logger.info("All workers cancelled")
+            self._logger.info("All workers cancelled")
