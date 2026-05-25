@@ -14,7 +14,7 @@ class PostgresQueryExecutor(IQueryExecutor):
             self,
             query: str,
             *args
-    ) -> list:
+    ) -> list[Mapping[str, Any]]:
         async with self._connection_pool.get_connection() as connection:
             return await connection.fetch(query, *args)
 

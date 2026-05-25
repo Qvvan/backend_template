@@ -36,7 +36,7 @@ class JsonFormatter(logging.Formatter):
 
 
 class AppLogger:
-    """Simple JSON-only application logger."""
+    __slots__ = ("level", "_logger")
 
     def __init__(self, level: str = "INFO"):
         self.level = level.upper()

@@ -13,7 +13,7 @@ class PostgresTransactionExecutor(IQueryExecutor):
     def __init__(self, conn: asyncpg.Connection):
         self._conn = conn
 
-    async def fetch(self, query, *args) -> list:
+    async def fetch(self, query, *args) -> list[Mapping[str, Any]]:
         return await self._conn.fetch(query, *args)
 
     async def fetchrow(self, query: str, *args) -> Mapping[str, Any] | None:
