@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends
 
 from src.api.dependencies import get_postgres_db, get_rabbitmq, get_redis

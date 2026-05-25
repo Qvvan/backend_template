@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from fastapi import FastAPI
 from fastapi.responses import ORJSONResponse
 from starlette.requests import Request

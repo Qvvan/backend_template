@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from functools import cached_property
 
 from src.core.container.infrastructure import InfrastructureContainer

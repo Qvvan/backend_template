@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import redis.asyncio as aioredis
 
 from src.core.logger import AppLogger

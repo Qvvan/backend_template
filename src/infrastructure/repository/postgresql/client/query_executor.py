@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any, Mapping
 
 from src.infrastructure.repository.postgresql.client.connection import PostgresConnectionPool

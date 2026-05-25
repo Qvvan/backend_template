@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from src.core.config import Config
 from src.core.container.infrastructure import InfrastructureContainer
 from src.core.container.repositories import RepositoryContainer

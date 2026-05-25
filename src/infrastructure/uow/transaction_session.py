@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from src.interfaces.clients.db.query_executor import IQueryExecutor
 
 

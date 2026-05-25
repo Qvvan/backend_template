@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import redis.asyncio as aioredis
 
 from src.interfaces.clients.cache_client.repository import ICacheRepository
