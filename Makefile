@@ -1,4 +1,11 @@
-.PHONY: lint format typecheck test check fix all pre-commit-install
+.PHONY: lint format typecheck test test-unit test-integration test-cov test-v check fix all pre-commit-install dev-up dev-down
+
+# ── Dev-окружение ─────────────────────────────────────────────────────────────
+dev-up:
+	docker compose up -d
+
+dev-down:
+	docker compose down
 
 # ── Pre-commit ────────────────────────────────────────────────────────────────
 pre-commit-install:
@@ -28,6 +35,12 @@ typecheck:
 # ── Тесты ─────────────────────────────────────────────────────────────────────
 test:
 	uv run pytest
+
+test-unit:
+	uv run pytest tests/unit/
+
+test-integration:
+	uv run pytest -m integration
 
 test-cov:
 	uv run pytest --cov=src --cov-report=term-missing

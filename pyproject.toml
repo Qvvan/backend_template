@@ -18,9 +18,15 @@ dependencies = [
 [dependency-groups]
 dev = [
     "granian[reload, uvloop]>=2.6.1",
+    "httpx>=0.28.1",
+    "pika>=1.4.1",
     "pre-commit>=4.6.0",
     "pyright>=1.1.409",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.14.3",
+    "testcontainers>=4.14.2",
 ]
 test = [
     "pytest>=8.4.2",
@@ -83,3 +89,8 @@ known-first-party = ["src"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-m 'not integration'"
+markers = [
+    "integration: marks tests as integration tests (require running infrastructure)",
+]
