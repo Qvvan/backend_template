@@ -29,16 +29,16 @@ class RabbitMQClient(IAMQPClient):
     """RabbitMQ клиент для публикации и потребления сообщений"""
 
     __slots__ = (
+        "_cert_path",
         "_channel",
+        "_connect_lock",
         "_connection",
         "_exchange_cache",
+        "_logger",
         "_prefetch_count",
         "_queue_list",
-        "_cert_path",
         "_tls_enabled",
-        "_logger",
         "_url",
-        "_connect_lock",
     )
 
     def __init__(
@@ -65,6 +65,12 @@ class RabbitMQClient(IAMQPClient):
         self._cert_path: str | None = cert_path
         self._prefetch_count: int = 10
         self._connect_lock = asyncio.Lock()
+
+    @property
+    def _ch(self) -> AbstractChannel:
+        if self._channel is None:
+            raise RuntimeError("RabbitMQ channel not initialized — call connect() first")
+        return self._channel
 
     async def connect(self) -> None:
         """Устанавливает соединение с RabbitMQ"""
@@ -102,16 +108,16 @@ class RabbitMQClient(IAMQPClient):
         cache_key = (name, exchange_type)
         ex = self._exchange_cache.get(cache_key)
         if not ex:
-            ex = await self._channel.declare_exchange(name, aio_pika.ExchangeType(exchange_type), durable=True)
+            ex = await self._ch.declare_exchange(name, aio_pika.ExchangeType(exchange_type), durable=True)
             self._exchange_cache[cache_key] = ex
         return ex
 
-    async def declare_queue(
-            self, name: str, exchange: str, routing_key: str, exchange_type: str = aio_pika.ExchangeType.TOPIC
+    async def _declare_queue(
+        self, name: str, exchange: str, routing_key: str, exchange_type: str = aio_pika.ExchangeType.TOPIC
     ) -> AbstractQueue:
         await self._ensure_connected()
         ex = await self._declare_exchange(exchange, exchange_type=exchange_type)
-        queue = await self._channel.declare_queue(name, durable=True)
+        queue = await self._ch.declare_queue(name, durable=True)
         await queue.bind(ex, routing_key)
         return queue
 
@@ -126,20 +132,20 @@ class RabbitMQClient(IAMQPClient):
         await ex.publish(message, routing_key=routing_key)
 
     async def consume(
-            self,
-            queue_name: str,
-            handler: Callable[[T], Awaitable[None]],
-            model: type[T],
-            exchange: str | None = None,
-            routing_key: str | None = None,
-            exchange_type: str = aio_pika.ExchangeType.TOPIC,
+        self,
+        queue_name: str,
+        handler: Callable[[T], Awaitable[None]],
+        model: type[T],
+        exchange: str | None = None,
+        routing_key: str | None = None,
+        exchange_type: str = aio_pika.ExchangeType.TOPIC,
     ) -> None:
         await self._ensure_connected()
 
         if exchange and routing_key:
-            queue = await self.declare_queue(queue_name, exchange, routing_key, exchange_type)
+            queue = await self._declare_queue(queue_name, exchange, routing_key, exchange_type)
         else:
-            queue = await self._channel.declare_queue(queue_name, durable=True, passive=False)
+            queue = await self._ch.declare_queue(queue_name, durable=True, passive=False)
 
         async def on_message(message: AbstractIncomingMessage) -> None:
             async with message.process(requeue=False):

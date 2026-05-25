@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from starlette import status
+from starlette.exceptions import HTTPException
 
 from src.api.dependencies import get_postgres_db, get_rabbitmq, get_redis
 from src.interfaces.clients.cache_client.client import ICacheDB
 from src.interfaces.clients.db.connection import IDBTransactional
-from starlette import status
-from starlette.exceptions import HTTPException
-
 from src.interfaces.messaging.client import IAMQPClient
 
 router = APIRouter(prefix="/health", tags=["Health"])
+
 
 @router.get(
     path="/",
@@ -55,6 +55,7 @@ async def health_check_rabbitmq(rabbitmq: IAMQPClient = Depends(get_rabbitmq)) -
         )
 
     return {"status": "ok"}
+
 
 @router.get(
     "/redis",

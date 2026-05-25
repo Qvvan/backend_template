@@ -18,6 +18,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "granian[reload, uvloop]>=2.6.1",
+    "pyright>=1.1.409",
     "ruff>=0.14.3",
 ]
 test = [
@@ -29,6 +30,11 @@ test = [
 migrations = [
     "psycopg2-binary>=2.9.11",
 ]
+
+[tool.pyright]
+  pythonVersion = "3.12"
+  typeCheckingMode = "standard"
+  include = ["src"]
 
 [tool.ruff]
 line-length = 120
@@ -66,7 +72,6 @@ ignore = [
     "B008",
     "RUF003",
     "RUF002",
-    "RUF001"
 ]
 
 [tool.ruff.lint.pylint]

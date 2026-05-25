@@ -5,6 +5,7 @@ from starlette import status
 
 class AppError(Exception):
     """Базовое исключение приложения"""
+
     http_status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR
 
     def __init__(self, message: str, code: str = "UNKNOWN_ERROR"):
@@ -15,6 +16,7 @@ class AppError(Exception):
 
 class DatabaseError(AppError):
     """Исключения при работе с БД"""
+
     http_status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
 
     def __init__(self, message: str):
@@ -23,6 +25,7 @@ class DatabaseError(AppError):
 
 class ValidationError(AppError):
     """Исключения валидации"""
+
     http_status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
 
     def __init__(self, message: str):
@@ -31,6 +34,7 @@ class ValidationError(AppError):
 
 class NotFoundError(AppError):
     """Сущность не найдена"""
+
     http_status_code = status.HTTP_404_NOT_FOUND
 
     def __init__(self, entity: str, identifier: str):
@@ -40,6 +44,7 @@ class NotFoundError(AppError):
 
 class ConflictError(AppError):
     """Конфликт данных"""
+
     http_status_code = status.HTTP_409_CONFLICT
 
     def __init__(self, message: str):

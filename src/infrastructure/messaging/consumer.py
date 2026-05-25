@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 
 from src.core.logger import AppLogger
-from src.interfaces.messaging.consumer import IConsumer
 from src.interfaces.messaging.client import IAMQPClient
+from src.interfaces.messaging.consumer import IConsumer
 
 
 class BackendConsumer(IConsumer):
@@ -31,4 +31,3 @@ class BackendConsumer(IConsumer):
         """Настройка всех consumers для обработки сообщений"""
 
         self._logger.info("Consumer started")
-

@@ -7,6 +7,7 @@ from src.interfaces.clients.cache_client.repository import ICacheRepository
 
 class RedisRepository(ICacheRepository):
     """Реализация репозитория для работы с Redis."""
+
     __slots__ = ("_client",)
 
     def __init__(self, client: aioredis.Redis) -> None:
@@ -53,9 +54,9 @@ class RedisRepository(ICacheRepository):
         return dict(zip(keys, values, strict=True))
 
     async def set_many(
-            self,
-            mapping: dict[str, str],
-            expire: int | None = None,
+        self,
+        mapping: dict[str, str],
+        expire: int | None = None,
     ) -> bool:
         if not mapping:
             return True
@@ -65,9 +66,8 @@ class RedisRepository(ICacheRepository):
                     pipe.setex(key, expire, value)
                 results = await pipe.execute()
             return all(not isinstance(r, Exception) for r in results)
-        else:
-            await self._client.mset(mapping)
-            return True
+        await self._client.mset(mapping)
+        return True
 
     async def delete_many(self, keys: list[str]) -> int:
         """Удалить несколько ключей. Возвращает количество удалённых ключей."""

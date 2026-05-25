@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from src.infrastructure.uow.transaction_session import TransactionSession
 from src.interfaces.clients.db.connection import IDBTransactional

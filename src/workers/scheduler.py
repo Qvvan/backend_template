@@ -7,25 +7,20 @@ from src.interfaces.workers.worker import IWorker
 
 
 class AsyncScheduler:
-    __slots__ = ("_logger", "_workers", "_stop_events", "_tasks")
+    __slots__ = ("_logger", "_stop_events", "_tasks", "_workers")
 
     def __init__(
-            self,
-            logger: AppLogger,
-            workers: list[IWorker],
+        self,
+        logger: AppLogger,
+        workers: list[IWorker],
     ) -> None:
         self._logger = logger
         self._workers = workers
-        self._stop_events: dict[str, asyncio.Event] = {
-            w.name: asyncio.Event() for w in workers
-        }
+        self._stop_events: dict[str, asyncio.Event] = {w.name: asyncio.Event() for w in workers}
         self._tasks: dict[str, asyncio.Task[None]] = {}
 
     def _register_tasks(self) -> None:
-        self._tasks = {
-            w.name: asyncio.create_task(w.start(self._stop_events[w.name]))
-            for w in self._workers
-        }
+        self._tasks = {w.name: asyncio.create_task(w.start(self._stop_events[w.name])) for w in self._workers}
 
     async def stop_worker(self, name: str) -> None:
         if name not in self._stop_events:
@@ -74,7 +69,7 @@ class AsyncScheduler:
         try:
             await self.wait_until_done()
             self._logger.info("All workers stopped gracefully")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._logger.warning("Some workers didn't stop gracefully, cancelling...")
             for task in self._tasks.values():
                 if not task.done():

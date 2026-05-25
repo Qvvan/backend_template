@@ -1,0 +1,48 @@
+.PHONY: lint format typecheck test check fix all
+
+# ── Линтер ────────────────────────────────────────────────────────────────────
+lint:
+	uv run ruff check src/
+
+# Автоисправление + форматирование
+fix:
+	uv run ruff check src/ --fix
+	uv run ruff format src/
+
+# Только форматирование (без lint-правил)
+format:
+	uv run ruff format src/
+
+# Проверка форматирования без изменений
+format-check:
+	uv run ruff format src/ --check
+
+# ── Типы ──────────────────────────────────────────────────────────────────────
+typecheck:
+	uv run pyright src/
+
+# ── Тесты ─────────────────────────────────────────────────────────────────────
+test:
+	uv run pytest
+
+test-cov:
+	uv run pytest --cov=src --cov-report=term-missing
+
+test-v:
+	uv run pytest -v
+
+# ── Всё сразу ─────────────────────────────────────────────────────────────────
+
+# Только проверка — ничего не меняет
+check:
+	uv run ruff check src/
+	uv run ruff format src/ --check
+	uv run pyright src/
+	uv run pytest
+
+# Исправить всё + проверка типов + тесты
+all:
+	uv run ruff check src/ --fix
+	uv run ruff format src/
+	uv run pyright src/
+	uv run pytest

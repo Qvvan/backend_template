@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
-import asyncpg
+from asyncpg.pool import PoolConnectionProxy
 
 from src.interfaces.clients.db.query_executor import IQueryExecutor
 
@@ -12,7 +13,7 @@ class PostgresTransactionExecutor(IQueryExecutor):
 
     __slots__ = ("_conn",)
 
-    def __init__(self, conn: asyncpg.Connection) -> None:
+    def __init__(self, conn: PoolConnectionProxy) -> None:
         self._conn = conn
 
     async def fetch(self, query: str, *args: Any) -> list[Mapping[str, Any]]:

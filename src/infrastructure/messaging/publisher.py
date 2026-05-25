@@ -9,6 +9,7 @@ from src.interfaces.messaging.publisher import IMessagePublisher
 
 class MessagePublisher(IMessagePublisher):
     """Общий publisher для всех событий"""
+
     __slots__ = ("_logger", "_rabbit")
 
     def __init__(self, rabbit: IAMQPClient, logger: AppLogger) -> None:

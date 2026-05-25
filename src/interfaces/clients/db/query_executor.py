@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 
 class IFetch(ABC):
@@ -24,4 +25,5 @@ class IExecutor(ABC):
 
 class IQueryExecutor(IFetch, IFetchRow, IExecutor, ABC):
     """Полный интерфейс для работы с БД"""
+
     ...

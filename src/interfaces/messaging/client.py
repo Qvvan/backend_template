@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from enum import StrEnum
-from typing import Any, Protocol, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
@@ -16,14 +16,6 @@ class AMQPExchangeType(StrEnum):
 
 
 T = TypeVar("T", bound=BaseModel)
-
-
-class IQueue(Protocol):
-    async def bind(self, exchange: Any, routing_key: str) -> None: ...
-
-    async def consume(self, callback: Any) -> str: ...
-
-    async def cancel(self, consumer_tag: str) -> None: ...
 
 
 class IAMQPClient(ABC):
@@ -40,24 +32,19 @@ class IAMQPClient(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def declare_queue(self, name: str, exchange: str, routing_key: str, exchange_type: str = "topic") -> IQueue:
-        """Объявляет очередь и привязывает к exchange"""
-        raise NotImplementedError
-
-    @abstractmethod
     async def publish(self, exchange: str, routing_key: str, payload: dict[str, Any]) -> None:
         """Публикует сообщение в exchange"""
         raise NotImplementedError
 
     @abstractmethod
     async def consume(
-            self,
-            queue_name: str,
-            handler: Callable[[T], Awaitable[None]],
-            model: type[T],
-            exchange: str | None = None,
-            routing_key: str | None = None,
-            exchange_type: str = AMQPExchangeType.Topic,
+        self,
+        queue_name: str,
+        handler: Callable[[T], Awaitable[None]],
+        model: type[T],
+        exchange: str | None = None,
+        routing_key: str | None = None,
+        exchange_type: str = AMQPExchangeType.Topic,
     ) -> None:
         raise NotImplementedError
 

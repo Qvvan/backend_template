@@ -8,7 +8,8 @@ from src.interfaces.clients.cache_client.client import ICacheDB
 
 class RedisDB(ICacheDB):
     """Обёртка над Redis async client."""
-    __slots__ = ("_logger", "_client")
+
+    __slots__ = ("_client", "_logger")
 
     def __init__(
         self,
@@ -34,7 +35,6 @@ class RedisDB(ICacheDB):
 
     @property
     def client(self) -> aioredis.Redis:
-        """Получить Redis клиент."""
         return self._client
 
     async def close(self) -> None:
@@ -43,8 +43,7 @@ class RedisDB(ICacheDB):
 
     async def health_check(self) -> bool:
         try:
-            return await self._client.ping()
+            return await self._client.ping()  # type: ignore[misc]
         except Exception as e:
             self._logger.error("Redis health check failed", error=e)
             return False
-

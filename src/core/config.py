@@ -56,6 +56,7 @@ class RabbitMQConfig(ConfigBase):
 
 class RedisConfig(ConfigBase):
     """Redis cache_client settings"""
+
     model_config = SettingsConfigDict(env_prefix="REDIS_", frozen=True)
 
     HOST: str
@@ -70,8 +71,8 @@ class RedisConfig(ConfigBase):
 class Config(ConfigBase):
     """Главный класс конфигурации"""
 
-    app: AppConfig = Field(default_factory=AppConfig)
-    logging: LoggingConfig = Field(default_factory=LoggingConfig)
-    postgres: PostgresConfig = Field(default_factory=PostgresConfig)
-    rabbitmq: RabbitMQConfig = Field(default_factory=RabbitMQConfig)
-    redis: RedisConfig = Field(default_factory=RedisConfig)
+    app: AppConfig = Field(default_factory=AppConfig)  # type: ignore[arg-type]
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)  # type: ignore[arg-type]
+    postgres: PostgresConfig = Field(default_factory=PostgresConfig)  # type: ignore[arg-type]
+    rabbitmq: RabbitMQConfig = Field(default_factory=RabbitMQConfig)  # type: ignore[arg-type]
+    redis: RedisConfig = Field(default_factory=RedisConfig)  # type: ignore[arg-type]
