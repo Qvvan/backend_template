@@ -53,9 +53,9 @@ class IAMQPClient(ABC):
             queue_name: str,
             handler: Callable[[T], Awaitable[None]],
             model: type[T],
-            exchange_type: str,
             exchange: str | None = None,
             routing_key: str | None = None,
+            exchange_type: str = AMQPExchangeType.Topic,
     ) -> None:
         raise NotImplementedError
 

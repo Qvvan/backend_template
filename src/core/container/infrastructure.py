@@ -15,7 +15,7 @@ class InfrastructureContainer:
         self._logger = logger
 
     @cached_property
-    def postgres_db(self):
+    def postgres_db(self) -> PostgresConnectionPool:
         return PostgresConnectionPool(
             user=self._config.postgres.USER,
             password=self._config.postgres.PASSWORD.get_secret_value(),

@@ -20,7 +20,6 @@ class Container:
         self.infra = InfrastructureContainer(config, self.logger)
         self.repos = RepositoryContainer(self.infra)
         self.services = ServiceContainer(
-            config=config,
             infra=self.infra,
             repos=self.repos,
         )

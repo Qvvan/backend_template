@@ -5,6 +5,7 @@ from src.interfaces.clients.cache_client.repository import ICacheRepository
 
 class RedisRepository(ICacheRepository):
     """Реализация репозитория для работы с Redis."""
+    __slots__ = ("_client",)
 
     def __init__(self, client: aioredis.Redis) -> None:
         self._client = client

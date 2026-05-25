@@ -6,6 +6,7 @@ from src.interfaces.clients.cache_client.client import ICacheDB
 
 class RedisDB(ICacheDB):
     """Обёртка над Redis async client."""
+    __slots__ = ("_logger", "_client")
 
     def __init__(
         self,
@@ -42,6 +43,6 @@ class RedisDB(ICacheDB):
         try:
             return await self._client.ping()
         except Exception as e:
-            self._logger.error(f"Redis health check failed: {e!s}")
+            self._logger.error("Redis health check failed", error=e)
             return False
 

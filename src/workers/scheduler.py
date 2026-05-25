@@ -33,9 +33,9 @@ class AsyncScheduler:
             try:
                 await asyncio.shield(task)
             except Exception as e:
-                self.logger.warning(f"Worker {name} raised during stop: {e!s}")
+                self.logger.warning("Worker raised during stop", worker_name=name, error=e)
         self._tasks.pop(name, None)
-        self.logger.info(f"Worker {name} stopped")
+        self.logger.info("Worker stopped", worker_name=name)
 
     async def start_worker(self, name: str) -> None:
         worker = next((w for w in self.workers if w.name == name), None)
@@ -44,19 +44,19 @@ class AsyncScheduler:
 
         self.stop_events[name] = asyncio.Event()
         self._tasks[name] = asyncio.create_task(worker.start(self.stop_events[name]))
-        self.logger.info(f"Worker {name} started")
+        self.logger.info("Worker started", worker_name=name)
 
     async def _stop_workers(self):
         """Останавливаем всех воркеров через их события"""
         for w in self.workers:
             if w.name in self.stop_events:
                 self.stop_events[w.name].set()
-                self.logger.info(f"Stop signal sent to {w.name}")
+                self.logger.info("Stop signal sent to", worker_name=w.name)
 
     def start(self) -> None:
         self.logger.info("Scheduler starting workers...")
         self._register_tasks()
-        self.logger.info(f"Scheduler started {len(self._tasks)} workers")
+        self.logger.info("Scheduler started workers", count_workers=len(self._tasks))
 
     async def wait_until_done(self) -> None:
         if not self._tasks:

@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from urllib.parse import quote_plus
+
 import asyncpg
 
 from src.core.logger import AppLogger
@@ -10,25 +11,34 @@ from src.interfaces.clients.db.connection import IDBTransactional
 
 
 class PostgresConnectionPool(IDBTransactional):
-    __slots__ = ("_logger", "_pool", "dsn", "echo", "pool_size", "_command_timeout", "_statement_cache_size", "_connect_lock")
+    __slots__ = (
+        "_logger",
+        "_pool",
+        "_dsn",
+        "_echo",
+        "_pool_size",
+        "_command_timeout",
+        "_statement_cache_size",
+        "_connect_lock"
+    )
 
     def __init__(
-        self,
-        *,
-        logger: AppLogger,
-        user: str,
-        password: str,
-        host: str,
-        port: int,
-        database: str,
-        echo: bool = False,
-        pool_size: int = 5,
-        command_timeout: int = 10,
-        statement_cache_size: int = 256,
+            self,
+            *,
+            logger: AppLogger,
+            user: str,
+            password: str,
+            host: str,
+            port: int,
+            database: str,
+            echo: bool = False,
+            pool_size: int = 5,
+            command_timeout: int = 10,
+            statement_cache_size: int = 256,
     ):
-        self.dsn = f"postgresql://{user}:{quote_plus(password)}@{host}:{port}/{database}"
-        self.echo = echo
-        self.pool_size = pool_size
+        self._dsn = f"postgresql://{user}:{quote_plus(password)}@{host}:{port}/{database}"
+        self._echo = echo
+        self._pool_size = pool_size
         self._logger = logger
         self._command_timeout = command_timeout
         self._statement_cache_size = statement_cache_size
@@ -37,6 +47,7 @@ class PostgresConnectionPool(IDBTransactional):
 
     async def connect(self) -> None:
         """Создает пул соединений с БД"""
+
         async def init_connection(connection: asyncpg.Connection) -> None:
             await connection.set_type_codec(
                 'uuid',
@@ -46,9 +57,9 @@ class PostgresConnectionPool(IDBTransactional):
             )
 
         self._pool = await asyncpg.create_pool(
-            self.dsn,
-            min_size=self.pool_size // 2,
-            max_size=self.pool_size,
+            self._dsn,
+            min_size=self._pool_size // 2,
+            max_size=self._pool_size,
             command_timeout=self._command_timeout,
             statement_cache_size=self._statement_cache_size,
             init=init_connection
@@ -56,8 +67,8 @@ class PostgresConnectionPool(IDBTransactional):
         if self._pool is None:
             raise RuntimeError("Failed to create connection pool")
 
-        if self.echo:
-            self._logger.info(f"Database pool created with {self.pool_size} connections")
+        if self._echo:
+            self._logger.info("Database pool created with connections", pool_size=self._pool_size)
 
     @asynccontextmanager
     async def get_connection(self) -> AsyncGenerator[asyncpg.Connection, None]:
@@ -71,7 +82,7 @@ class PostgresConnectionPool(IDBTransactional):
 
     @asynccontextmanager
     async def transaction(self) -> AsyncGenerator[PostgresTransactionExecutor, None]:
-        async with self.get_connection() as conn: # type: ignore[override]
+        async with self.get_connection() as conn:  # type: ignore[override]
             async with conn.transaction():
                 yield PostgresTransactionExecutor(conn)
 
@@ -88,5 +99,5 @@ class PostgresConnectionPool(IDBTransactional):
                     await conn.execute("SELECT 1")
                     return True
         except Exception as e:
-            self._logger.error(f"Health check failed: {e!s}")
+            self._logger.error("Health check failed", error=e)
             return False

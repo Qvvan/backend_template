@@ -4,7 +4,7 @@ from typing import Any, Mapping
 
 class IFetch(ABC):
     @abstractmethod
-    async def fetch(self, query, *args) -> list[Mapping[str, Any]]:
+    async def fetch(self, query: str, *args) -> list[Mapping[str, Any]]:
         raise NotImplementedError
 
 

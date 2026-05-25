@@ -5,7 +5,7 @@ from src.interfaces.clients.db.query_executor import IQueryExecutor
 
 
 class PostgresQueryExecutor(IQueryExecutor):
-    __slots__ = ["_connection_pool"]
+    __slots__ = ("_connection_pool",)
 
     def __init__(self, connection_pool: PostgresConnectionPool):
         self._connection_pool = connection_pool
@@ -13,7 +13,7 @@ class PostgresQueryExecutor(IQueryExecutor):
     async def fetch(
             self,
             query: str,
-            *args
+            *args: Any
     ) -> list[Mapping[str, Any]]:
         async with self._connection_pool.get_connection() as connection:
             return await connection.fetch(query, *args)
@@ -21,7 +21,7 @@ class PostgresQueryExecutor(IQueryExecutor):
     async def fetchrow(
             self,
             query: str,
-            *args
+            *args: Any
     ) -> Mapping[str, Any] | None:
         async with self._connection_pool.get_connection() as connection:
             return await connection.fetchrow(query, *args)
@@ -29,7 +29,7 @@ class PostgresQueryExecutor(IQueryExecutor):
     async def execute(
             self,
             query: str,
-            *args
+            *args: Any
     ) -> str:
         async with self._connection_pool.get_connection() as connection:
             return await connection.execute(query, *args)

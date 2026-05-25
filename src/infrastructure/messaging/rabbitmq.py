@@ -145,7 +145,7 @@ class RabbitMQClient(IAMQPClient):
                     payload = model.model_validate(raw)
                     await handler(payload)
                 except Exception as e:
-                    self._logger.error(f"Message handler failed: {e!s}")
+                    self._logger.error("Message handler failed", error=str(e))
                     raise
 
         consumer_tag = await queue.consume(on_message)
