@@ -1,4 +1,8 @@
-.PHONY: lint format typecheck test check fix all
+.PHONY: lint format typecheck test check fix all pre-commit-install
+
+# ── Pre-commit ────────────────────────────────────────────────────────────────
+pre-commit-install:
+	uv run pre-commit install
 
 # ── Линтер ────────────────────────────────────────────────────────────────────
 lint:
