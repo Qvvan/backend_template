@@ -213,8 +213,7 @@ class UserMessageHandler:
         self._service = service
         self._logger = logger
 
-    async def handle_user_created(self, data: dict[str, object]) -> None:
-        msg = UserCreatedMessage.model_validate(data)
+    async def handle_user_created(self, msg: UserCreatedMessage) -> None:
         entity = UserEntity(id=msg.user_id, name=msg.name, email=msg.email)
         self._logger.info("Handling user_created", user_id=msg.user_id)
         await self._service.on_user_created(entity)
@@ -228,6 +227,7 @@ async def register_consumers(self) -> None:
     await self._rabbit.consume(
         queue_name="user.created",
         handler=handler.handle_user_created,
+        model=UserCreatedMessage,
         exchange="users",
         routing_key="user.created",
     )
@@ -237,15 +237,14 @@ async def register_consumers(self) -> None:
 **ЗАПРЕЩЕНО в хендлере:**
 ```python
 # НЕПРАВИЛЬНО — бизнес-логика в хендлере
-async def handle_user_created(self, data: dict[str, object]) -> None:
-    msg = UserCreatedMessage.model_validate(data)
+async def handle_user_created(self, msg: UserCreatedMessage) -> None:
     if msg.email.endswith("@spam.com"):      # ← бизнес-логика
         return
     await self._repo.save(...)               # ← прямой вызов репозитория
 
-# НЕПРАВИЛЬНО — нет схемы, сырой dict
+# НЕПРАВИЛЬНО — неверная сигнатура (RabbitMQClient передаёт уже валидированный объект, не dict)
 async def handle_user_created(self, data: dict[str, object]) -> None:
-    user_id = data["user_id"]               # ← нет валидации через Pydantic
+    msg = UserCreatedMessage.model_validate(data)   # ← двойная валидация, хендлер принимает не dict
 ```
 
 ---
@@ -535,6 +534,30 @@ def __init__(self, config: Config, ...):            # ← запрещено
 - Здесь собираются все зависимости через `cached_property`.
 - `close()` закрывает соединения только если они были открыты (проверка через `__dict__`).
 
+**Правила конфигурации (`src/core/config.py`):**
+
+- Все секции Config (`PostgresConfig`, `RedisConfig`, `RabbitMQConfig`, `AppConfig`) используют `frozen=True` — конфиг неизменяем после инициализации, это защита от случайной мутации в рантайме.
+- Пароли и любые секреты — только `SecretStr`. Получить значение — `.get_secret_value()`. Нельзя передавать `SecretStr` напрямую в строку или SQL.
+- `Config` читается из переменных окружения через `SettingsConfigDict(env_prefix="...", frozen=True)`. Никакого `os.getenv()` нигде кроме `config.py`.
+
+```python
+# ПРАВИЛЬНО — SecretStr для секретов, frozen=True для каждой секции
+class PostgresConfig(ConfigBase):
+    model_config = SettingsConfigDict(env_prefix="POSTGRES_", frozen=True)
+    PASSWORD: SecretStr
+
+# В контейнере — единственное место, где достают значение:
+PostgresConnectionPool(password=self._config.postgres.PASSWORD.get_secret_value(), ...)
+
+# НЕПРАВИЛЬНО — plain str для секрета
+class PostgresConfig(ConfigBase):
+    PASSWORD: str           # ← утечёт в логи, repr, трейсбеки
+
+# НЕПРАВИЛЬНО — os.getenv вне config.py
+import os
+db_password = os.getenv("POSTGRES_PASSWORD")    # ← запрещено
+```
+
 **Реальная структура из проекта:**
 
 ```python
@@ -652,6 +675,23 @@ AppError             → HTTP 500 (базовое)
 | `IUnitOfWork` | `interfaces/clients/db/uow.py` | `PostgresUnitOfWork` |
 | `IWorker` | `interfaces/workers/worker.py` | кастомные воркеры |
 
+**Контракт `health_check()` для инфраструктурных клиентов:**
+
+Каждый инфраструктурный клиент (`PostgresConnectionPool`, `RedisDB`, `RabbitMQClient`) обязан реализовывать `health_check() -> bool`. Метод возвращает `True` если соединение живо, `False` при любой ошибке — без исключений наружу. Используется в `src/api/health.py`.
+
+```python
+# ПРАВИЛЬНО — health_check в каждом инфра-клиенте
+async def health_check(self) -> bool:
+    try:
+        async with asyncio.timeout(5):
+            async with self.get_connection() as conn:
+                await conn.execute("SELECT 1")
+        return True
+    except Exception as e:
+        self._logger.error("Health check failed", error=e)
+        return False
+```
+
 **ЗАПРЕЩЕНО в интерфейсах:**
 ```python
 # НЕПРАВИЛЬНО — инфраструктурный тип в интерфейсе
@@ -734,22 +774,40 @@ async def process(self, data: Any) -> dict:  # голые Any и dict
 
 ### 5.2 __slots__
 
+**Правило: все классы обязаны иметь `__slots__`, кроме классов с `cached_property`.**
+
+`cached_property` несовместим с `__slots__` (дескриптор требует `__dict__`), поэтому контейнеры (`InfrastructureContainer`, `RepositoryContainer`, `ServiceContainer`, `WorkerContainer`) — единственное исключение. Все остальные классы: сервисы, репозитории, хендлеры, воркеры, клиенты — обязаны объявлять `__slots__`.
+
 ```python
-# ПРАВИЛЬНО — на всех классах без динамических атрибутов
+# ПРАВИЛЬНО — __slots__ на всех обычных классах
 class PostgresQueryExecutor(IQueryExecutor):
-    __slots__ = ["_connection_pool"]          # реальный пример из проекта
+    __slots__ = ("_connection_pool",)         # реальный пример из проекта
 
     def __init__(self, connection_pool: PostgresConnectionPool) -> None:
         self._connection_pool = connection_pool
 
+class UserService(IUserService):
+    __slots__ = ("_repo",)
+
+    def __init__(self, repo: IUserRepository) -> None:
+        self._repo = repo
+
+# ПРАВИЛЬНО — контейнер без __slots__ (cached_property требует __dict__)
+class InfrastructureContainer:
+    @cached_property
+    def postgres_db(self) -> PostgresConnectionPool: ...
+
 # НЕПРАВИЛЬНО — __slots__ на классе с cached_property
 class InfrastructureContainer:
-    __slots__ = (...)                         # cached_property несовместим со __slots__
-    @cached_property                          # ← это сломает работу
-    def postgres_db(self): ...
-```
+    __slots__ = ("_config",)                  # сломает cached_property
+    @cached_property
+    def postgres_db(self) -> PostgresConnectionPool: ...
 
-Классы с `cached_property` (`InfrastructureContainer`, `RepositoryContainer`, `ServiceContainer`, `WorkerContainer`) **не используют `__slots__`** — это правильно.
+# НЕПРАВИЛЬНО — нет __slots__ на обычном классе
+class UserMessageHandler:
+    def __init__(self, service: IUserService) -> None:   # ← забыли __slots__
+        self._service = service
+```
 
 ### 5.3 Зависимости через интерфейс
 
@@ -782,17 +840,29 @@ class UserService(IUserService):
         return await self._repo.save(entity)   # один репозиторий — напрямую
 
 # ПРАВИЛЬНО — две таблицы меняются атомарно → UoW обязателен
+# TransactionSession хранит IQueryExecutor в _tx; при добавлении UoW-фичи
+# в TransactionSession добавляются @property-методы, возвращающие репозитории.
+#
+# src/infrastructure/uow/transaction_session.py (реальный файл):
+# class TransactionSession:
+#     __slots__ = ("_tx",)
+#     def __init__(self, tx: IQueryExecutor) -> None: self._tx = tx
+#     @property
+#     def orders(self) -> PostgresOrderRepository: return PostgresOrderRepository(self._tx)
+#     @property
+#     def inventory(self) -> PostgresInventoryRepository: return PostgresInventoryRepository(self._tx)
+
 class OrderService(IOrderService):
     async def place(self, order: OrderEntity) -> OrderEntity:
-        async with self._uow.begin() as tx:
-            result = await tx.orders.save(order)
-            await tx.inventory.decrement(order.item_id, order.qty)
+        async with self._uow.begin() as session:
+            result = await session.orders.save(order)
+            await session.inventory.decrement(order.item_id, order.qty)
             return result
 
 # НЕПРАВИЛЬНО — UoW для записи в одну таблицу (избыточно)
 async def create(self, entity: UserEntity) -> UserEntity:
-    async with self._uow.begin() as tx:
-        return await tx.users.save(entity)     # ← одна таблица, UoW не нужен
+    async with self._uow.begin() as session:
+        return await session.users.save(entity)   # ← одна таблица, UoW не нужен
 
 # НЕПРАВИЛЬНО — без транзакции когда меняются две таблицы
 async def place(self, order: OrderEntity) -> OrderEntity:
@@ -820,7 +890,7 @@ await client.consume(exchange_type=AMQPExchangeType.Topic)
 await client.consume(exchange_type="topic")    # магическая строка
 ```
 
-### 5.7 Логирование
+### 5.6 Логирование
 
 **Правила:**
 
@@ -853,7 +923,65 @@ self._logger.info("User %s created", entity.id)         # ← нельзя
 
 ---
 
-### 5.6 Graceful shutdown через AsyncScheduler
+### 5.7 Double-check lock для lazy connect в инфра-клиентах
+
+Все инфраструктурные клиенты с ленивым подключением используют `asyncio.Lock` с двойной проверкой — это предотвращает race condition при одновременных вызовах из разных корутин.
+
+```python
+# ПРАВИЛЬНО — паттерн из RabbitMQClient и PostgresConnectionPool
+async def _ensure_connected(self) -> None:
+    if not self._channel:                       # быстрая проверка без лока
+        async with self._connect_lock:
+            if not self._channel:               # повторная проверка под локом
+                await self.connect()
+
+# НЕПРАВИЛЬНО — нет двойной проверки (каждый вызов берёт лок)
+async def _ensure_connected(self) -> None:
+    async with self._connect_lock:
+        if not self._channel:
+            await self.connect()
+
+# НЕПРАВИЛЬНО — нет лока (race condition при параллельных запросах)
+async def _ensure_connected(self) -> None:
+    if not self._channel:
+        await self.connect()
+```
+
+Обязательно: `_connect_lock = asyncio.Lock()` инициализируется в `__init__`, добавляется в `__slots__`.
+
+---
+
+### 5.8 asyncio.timeout() vs asyncio.wait_for()
+
+Python 3.12+. Выбор зависит от того, нужно ли пробросить `TimeoutError` выше.
+
+```python
+# asyncio.timeout() — простой кейс, ошибка остаётся внутри блока
+# Используется в health_check: один вызов, ошибка поглощается
+async def health_check(self) -> bool:
+    try:
+        async with asyncio.timeout(5):
+            await self._conn.execute("SELECT 1")
+        return True
+    except Exception:
+        return False
+
+# asyncio.wait_for() — когда TimeoutError нужно поймать снаружи или передать
+# Используется в AsyncScheduler.shutdown() с таймаутом на всю группу задач
+try:
+    await asyncio.wait_for(
+        asyncio.gather(*self._tasks.values(), return_exceptions=True),
+        timeout=30.0,
+    )
+except TimeoutError:
+    # отменяем задачи принудительно
+    for task in self._tasks.values():
+        task.cancel()
+```
+
+---
+
+### 5.9 Graceful shutdown через AsyncScheduler
 
 ```python
 # Реальный пример из src/core/container/workers.py
@@ -894,3 +1022,278 @@ class WorkerContainer:
 7. `api/v1/` — создать эндпоинт
 8. `core/container/` — зарегистрировать в нужном контейнере
 9. `api/dependencies.py` — добавить DI-функцию
+
+---
+
+## 7. Тестирование
+
+### 7.1 Конфигурация
+
+```toml
+# pyproject.toml
+[tool.pytest.ini_options]
+asyncio_mode = "auto"          # все async def тесты запускаются без декоратора
+testpaths = ["tests"]
+addopts = "-m 'not integration'"   # интеграционные тесты отключены по умолчанию
+markers = [
+    "integration: marks tests as integration tests (require running infrastructure)",
+]
+```
+
+**Структура каталога:**
+
+```
+tests/
+├── conftest.py              # глобальные фикстуры (контейнеры, клиенты)
+├── unit/                    # юнит-тесты без I/O
+│   └── services/
+│       └── test_user_service.py
+└── integration/             # тесты с реальной инфраструктурой
+    ├── conftest.py          # testcontainers: Postgres, Redis, RabbitMQ
+    └── repository/
+        └── test_user_repository.py
+```
+
+### 7.2 Юнит-тесты
+
+- Тестируют **только domain entities и services**.
+- Репозитории — mock через `unittest.mock.AsyncMock`.
+- Никаких реальных соединений, никаких `testcontainers`.
+- Именование: `test_<метод>_<условие>_<ожидаемый результат>`.
+
+```python
+# tests/unit/services/test_user_service.py
+from __future__ import annotations
+from unittest.mock import AsyncMock
+import pytest
+from src.core.exceptions import ConflictError
+from src.domain.entities.user import UserEntity
+from src.services.user_service import UserService
+
+async def test_create_raises_conflict_when_email_exists() -> None:
+    repo = AsyncMock()
+    repo.find_by_email.return_value = UserEntity(name="existing", email="a@b.com")
+    service = UserService(repo=repo)
+
+    with pytest.raises(ConflictError):
+        await service.create(UserEntity(name="new", email="a@b.com"))
+```
+
+### 7.3 Интеграционные тесты
+
+- Используют `testcontainers` — реальные Postgres / Redis / RabbitMQ в Docker.
+- Обязательный маркер `@pytest.mark.integration`.
+- Запускаются явно: `pytest -m integration`.
+- Фикстуры с контейнерами — в `tests/integration/conftest.py`, scope=`"session"`.
+
+```python
+# tests/integration/conftest.py
+from __future__ import annotations
+import pytest
+from testcontainers.postgres import PostgresContainer
+from src.infrastructure.repository.postgresql.client.connection import PostgresConnectionPool
+
+@pytest.fixture(scope="session")
+def postgres_container():
+    with PostgresContainer("postgres:16") as pg:
+        yield pg
+
+@pytest.fixture(scope="session")
+async def postgres_pool(postgres_container: PostgresContainer) -> PostgresConnectionPool:
+    pool = PostgresConnectionPool(
+        user=postgres_container.username,
+        password=postgres_container.password,
+        host=postgres_container.get_container_host_ip(),
+        port=int(postgres_container.get_exposed_port(5432)),
+        database=postgres_container.dbname,
+    )
+    await pool.connect()
+    yield pool
+    await pool.close()
+```
+
+```python
+# tests/integration/repository/test_user_repository.py
+from __future__ import annotations
+import pytest
+from src.domain.entities.user import UserEntity
+from src.infrastructure.repository.postgresql.user_repository import PostgresUserRepository
+from src.infrastructure.repository.postgresql.client.connection import PostgresConnectionPool
+from src.infrastructure.repository.postgresql.client.query_executor import PostgresQueryExecutor
+
+@pytest.mark.integration
+async def test_save_and_find_user(postgres_pool: PostgresConnectionPool) -> None:
+    executor = PostgresQueryExecutor(connection_pool=postgres_pool)
+    repo = PostgresUserRepository(executor=executor)
+    entity = UserEntity(name="Ivan", email="ivan@example.com")
+
+    saved = await repo.save(entity)
+    found = await repo.find_by_id(saved.id)
+
+    assert found is not None
+    assert found.email == "ivan@example.com"
+```
+
+---
+
+## 8. Миграции (yoyo)
+
+### 8.1 Конфигурация
+
+```ini
+# yoyo.ini
+[DEFAULT]
+sources = migrations
+migration_table = _yoyo_migration
+batch_mode = off
+verbosity = 0
+```
+
+### 8.2 Именование файлов
+
+Формат: `<порядковый_номер>_<snake_case_описание>.py`
+
+```
+migrations/
+├── 0001_create_users_table.py
+├── 0002_add_email_index.py
+└── 0003_create_orders_table.py
+```
+
+Номера — 4 цифры с ведущими нулями. Описание — только строчные буквы и подчёркивания.
+
+### 8.3 Структура файла миграции
+
+```python
+from yoyo import step
+
+__depends__ = {"0001_create_users_table"}
+
+steps = [
+    step(
+        # apply
+        """
+        CREATE TABLE orders (
+            id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id     UUID NOT NULL REFERENCES users(id),
+            amount      NUMERIC(12, 2) NOT NULL,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """,
+        # rollback
+        """
+        DROP TABLE orders;
+        """,
+    ),
+    step(
+        """
+        CREATE INDEX idx_orders_user_id ON orders (user_id);
+        """,
+        """
+        DROP INDEX idx_orders_user_id;
+        """,
+    ),
+]
+```
+
+- `__depends__` — множество имён файлов предыдущих миграций (без `.py`). Пустое множество `{}` — для первой миграции.
+- Первый аргумент `step()` — apply (накат), второй — rollback (откат). Rollback обязателен.
+- Один `step` = одна логическая операция. Несколько `step` в одном файле — когда операции относятся к одной фиче.
+
+### 8.4 Запуск миграций
+
+```bash
+# Локально
+docker compose --profile migrate up migrate
+
+# В CI / вручную
+yoyo apply --batch --database "postgresql://user:pass@host/db" ./migrations
+```
+
+Сервис `migrate` в `docker-compose.yml` запускается только с профилем `--profile migrate` и зависит от healthcheck сервиса `db`.
+
+---
+
+## 9. Инструменты разработки
+
+### 9.1 Ruff
+
+Линтер и форматтер. Конфиг в `pyproject.toml`:
+
+```toml
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+fix = true
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "C4", "ARG", "SIM", "PTH", "RET", "RUF", "PL"]
+ignore = ["PLR0913", "PLR2004", "B008", "RUF003", "RUF002"]
+
+[tool.ruff.lint.pylint]
+max-args = 7    # ← методы/функции не должны иметь больше 7 аргументов
+```
+
+**Правило max-args = 7:** если конструктору нужно больше 7 аргументов — сгруппировать в отдельный объект-конфиг или использовать `*`-only параметры.
+
+```bash
+ruff check src/          # проверка
+ruff format src/         # форматирование
+```
+
+### 9.2 Pyright
+
+Статический type checker. Конфиг в `pyproject.toml`:
+
+```toml
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+include = ["src"]
+```
+
+`typeCheckingMode = "standard"` — строгая проверка типов. Перед коммитом обязателен:
+
+```bash
+pyright src/
+```
+
+Ошибки pyright — блокер. Код с `# type: ignore` допускается только с комментарием, объясняющим причину.
+
+### 9.3 pre-commit
+
+Хуки настроены в `.pre-commit-config.yaml`. Запускаются автоматически при `git commit`:
+
+```bash
+pre-commit install        # один раз после клонирования
+pre-commit run --all-files  # ручной прогон
+```
+
+### 9.4 Локальный запуск
+
+```bash
+# API-сервер (с hot-reload)
+docker compose up db redis rabbitmq -d
+granian --interface asgi --factory --loop uvloop --reload --host 0.0.0.0 src.main:create_app
+
+# Все тесты (без интеграционных)
+pytest
+
+# Интеграционные тесты (нужен Docker)
+pytest -m integration
+```
+
+**`main.py` — только factory функция.** Granian вызывает `create_app()` с флагом `--factory`. Голый `app = FastAPI()` на модульном уровне — запрещён.
+
+```python
+# src/main.py — ПРАВИЛЬНО
+def create_app() -> FastAPI:
+    config = Config()
+    app = FastAPI(...)
+    container = Container(config)
+    app.state.container = container
+    return app
+
+# НЕПРАВИЛЬНО — объект на модульном уровне
+app = FastAPI()    # ← не работает с --factory, ломает тесты
+```
