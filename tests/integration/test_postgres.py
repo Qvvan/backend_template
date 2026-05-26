@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 
 import pytest
 
@@ -78,3 +79,87 @@ async def test_pool_can_handle_concurrent_queries(pg_executor: PostgresQueryExec
     )
     values = [r["n"] for r in results if r is not None]
     assert sorted(values) == [1, 2, 3]
+
+
+# ---------------------------------------------------------------------------
+# Real-mutation transaction tests
+# ---------------------------------------------------------------------------
+
+
+async def test_transaction_commit_persists_row(
+    pg_pool: PostgresConnectionPool,
+    pg_executor: PostgresQueryExecutor,
+) -> None:
+    """Успешный выход из transaction() коммитит строку: она видна снаружи через независимый executor."""
+    table = f"t_{uuid.uuid4().hex[:8]}"
+    await pg_executor.execute(f"CREATE TABLE {table} (val TEXT NOT NULL)")
+    try:
+        async with pg_pool.transaction() as tx:
+            await tx.execute(f"INSERT INTO {table} VALUES ('committed')")
+
+        row = await pg_executor.fetchrow(f"SELECT val FROM {table}")
+        assert row is not None
+        assert row["val"] == "committed"
+    finally:
+        await pg_executor.execute(f"DROP TABLE IF EXISTS {table}")
+
+
+async def test_transaction_rollback_reverts_row(
+    pg_pool: PostgresConnectionPool,
+    pg_executor: PostgresQueryExecutor,
+) -> None:
+    """При исключении внутри transaction() вставка откатывается: строка не появляется в таблице."""
+    table = f"t_{uuid.uuid4().hex[:8]}"
+    await pg_executor.execute(f"CREATE TABLE {table} (val TEXT NOT NULL)")
+    try:
+        with pytest.raises(RuntimeError, match="forced"):
+            async with pg_pool.transaction() as tx:
+                await tx.execute(f"INSERT INTO {table} VALUES ('ghost')")
+                raise RuntimeError("forced")
+
+        row = await pg_executor.fetchrow(f"SELECT val FROM {table}")
+        assert row is None
+    finally:
+        await pg_executor.execute(f"DROP TABLE IF EXISTS {table}")
+
+
+# ---------------------------------------------------------------------------
+# UnitOfWork real-mutation tests
+# ---------------------------------------------------------------------------
+
+
+async def test_uow_commit_persists_row(
+    pg_uow: PostgresUnitOfWork,
+    pg_executor: PostgresQueryExecutor,
+) -> None:
+    """UoW.begin() при нормальном выходе коммитит строку: она видна снаружи через независимый executor."""
+    table = f"t_{uuid.uuid4().hex[:8]}"
+    await pg_executor.execute(f"CREATE TABLE {table} (val TEXT NOT NULL)")
+    try:
+        async with pg_uow.begin() as session:
+            await session._tx.execute(f"INSERT INTO {table} VALUES ('committed')")
+
+        row = await pg_executor.fetchrow(f"SELECT val FROM {table}")
+        assert row is not None
+        assert row["val"] == "committed"
+    finally:
+        await pg_executor.execute(f"DROP TABLE IF EXISTS {table}")
+
+
+async def test_uow_rollback_on_exception_reverts_row(
+    pg_uow: PostgresUnitOfWork,
+    pg_executor: PostgresQueryExecutor,
+) -> None:
+    """При исключении внутри UoW.begin() вставленная строка не появляется в таблице — транзакция откатывается."""
+    table = f"t_{uuid.uuid4().hex[:8]}"
+    await pg_executor.execute(f"CREATE TABLE {table} (val TEXT NOT NULL)")
+    try:
+        with pytest.raises(RuntimeError, match="forced"):
+            async with pg_uow.begin() as session:
+                await session._tx.execute(f"INSERT INTO {table} VALUES ('ghost')")
+                raise RuntimeError("forced")
+
+        row = await pg_executor.fetchrow(f"SELECT val FROM {table}")
+        assert row is None
+    finally:
+        await pg_executor.execute(f"DROP TABLE IF EXISTS {table}")
