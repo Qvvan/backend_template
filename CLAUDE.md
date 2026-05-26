@@ -683,6 +683,8 @@ class IUserRepository(ABC):
 | 14 | Несколько агрегатов в одном репозитории | Repositories |
 | 15 | `from __future__ import annotations` отсутствует в файле | Все `.py` файлы |
 | 16 | Отсутствие возвращаемого типа на методе | Все классы |
+| 17 | `print()` вместо `logger.*()` | Везде |
+| 18 | f-строки в аргументе `message` логгера | Везде |
 
 ---
 
@@ -817,6 +819,39 @@ await client.consume(exchange_type=AMQPExchangeType.Topic)
 # НЕПРАВИЛЬНО
 await client.consume(exchange_type="topic")    # магическая строка
 ```
+
+### 5.7 Логирование
+
+**Правила:**
+
+- **Никогда не используем `print()`** — только методы `AppLogger`: `debug`, `info`, `warning`, `error`, `critical`.
+- **Никогда не используем f-строки в `message`** — строка сообщения всегда статическая; переменные передаются как именованные поля (`**fields`), которые попадают в JSON-лог отдельными ключами.
+- `logger.error()` вызывается **внутри блока `except`** — тогда `exc_info` подхватывается автоматически; снаружи `except` — используй `logger.warning()` или `logger.info()`.
+- Логируем только значимые события: начало/конец обработки, аномальное поведение. Не логируем каждый SQL-запрос или внутренний шаг.
+
+```python
+# ПРАВИЛЬНО — статическое сообщение, данные как fields
+self._logger.info("User created", user_id=entity.id, email=entity.email)
+self._logger.warning("Retry attempt", queue="user.created", attempt=3)
+
+# ПРАВИЛЬНО — error внутри except: exc_info добавляется автоматически
+try:
+    await self._repo.save(entity)
+except Exception:
+    self._logger.error("Failed to save user", user_id=entity.id)
+    raise
+
+# НЕПРАВИЛЬНО — f-строка в сообщении
+self._logger.info(f"User {entity.id} created")          # ← нельзя
+
+# НЕПРАВИЛЬНО — print вместо logger
+print(f"User {entity.id} created")                      # ← нельзя
+
+# НЕПРАВИЛЬНО — позиционное форматирование вместо fields
+self._logger.info("User %s created", entity.id)         # ← нельзя
+```
+
+---
 
 ### 5.6 Graceful shutdown через AsyncScheduler
 
