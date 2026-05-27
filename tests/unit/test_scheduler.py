@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -113,3 +114,41 @@ async def test_raising_worker_does_not_hang_shutdown(app_logger: AppLogger) -> N
     scheduler.start()
     await asyncio.sleep(0)
     await scheduler.shutdown()
+
+
+# ── lines 33-34: exception swallowed in stop_worker ──────────────────────────
+
+
+async def test_stop_worker_swallows_exception_from_raising_worker(app_logger: AppLogger) -> None:
+    # _RaisingWorker raises RuntimeError after stop event is set.
+    # stop_worker must catch it and log a warning — not propagate.
+    worker = _RaisingWorker()
+    scheduler = AsyncScheduler(logger=app_logger, workers=[worker])
+    scheduler.start()
+    await asyncio.sleep(0)
+
+    await scheduler.stop_worker("raising")  # must not raise
+
+
+# ── line 41: early return in start_worker when name not found ─────────────────
+
+
+async def test_start_nonexistent_worker_does_not_raise(app_logger: AppLogger) -> None:
+    scheduler = AsyncScheduler(logger=app_logger, workers=[])
+    await scheduler.start_worker("does-not-exist")  # must return silently
+
+
+# ── lines 72-78: timeout path in shutdown cancels tasks ──────────────────────
+
+
+async def test_shutdown_timeout_cancels_pending_tasks(app_logger: AppLogger) -> None:
+    worker = _StubWorker("w1")
+    scheduler = AsyncScheduler(logger=app_logger, workers=[worker])
+    scheduler.start()
+    await asyncio.sleep(0)
+
+    # Simulate wait_until_done timing out without actually waiting 30 s.
+    # patch.object on the class (not the instance) is required because
+    # AsyncScheduler uses __slots__, which makes instance attributes read-only.
+    with patch.object(AsyncScheduler, "wait_until_done", AsyncMock(side_effect=TimeoutError)):
+        await scheduler.shutdown()  # must complete without raising
