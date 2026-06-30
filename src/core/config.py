@@ -68,6 +68,18 @@ class RedisConfig(ConfigBase):
     SOCKET_CONNECT_TIMEOUT: float = 5.0
 
 
+class MinIOConfig(ConfigBase):
+    """MinIO object storage settings"""
+
+    model_config = SettingsConfigDict(env_prefix="MINIO_", frozen=True)
+
+    HOST: str
+    PORT: int
+    ACCESS_KEY: str
+    SECRET_KEY: SecretStr
+    SECURE: bool = False
+
+
 class Config(ConfigBase):
     """Главный класс конфигурации"""
 
@@ -76,3 +88,4 @@ class Config(ConfigBase):
     postgres: PostgresConfig = Field(default_factory=PostgresConfig)  # type: ignore[arg-type]
     rabbitmq: RabbitMQConfig = Field(default_factory=RabbitMQConfig)  # type: ignore[arg-type]
     redis: RedisConfig = Field(default_factory=RedisConfig)  # type: ignore[arg-type]
+    minio: MinIOConfig = Field(default_factory=MinIOConfig)  # type: ignore[arg-type]

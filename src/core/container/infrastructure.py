@@ -8,6 +8,7 @@ from src.infrastructure.messaging.rabbitmq import RabbitMQClient
 from src.infrastructure.repository.postgresql.client.connection import PostgresConnectionPool
 from src.infrastructure.repository.postgresql.client.query_executor import PostgresQueryExecutor
 from src.infrastructure.repository.redis.client import RedisDB
+from src.infrastructure.storage.minio.client import MinIOClient
 from src.infrastructure.uow.postgres_uow import PostgresUnitOfWork
 
 
@@ -62,6 +63,16 @@ class InfrastructureContainer:
     def postgres_unit_of_work(self) -> PostgresUnitOfWork:
         return PostgresUnitOfWork(pool=self.postgres_db)
 
+    @cached_property
+    def minio_client(self) -> MinIOClient:
+        return MinIOClient(
+            logger=self._logger,
+            endpoint=f"{self._config.minio.HOST}:{self._config.minio.PORT}",
+            access_key=self._config.minio.ACCESS_KEY,
+            secret_key=self._config.minio.SECRET_KEY.get_secret_value(),
+            secure=self._config.minio.SECURE,
+        )
+
     async def close(self) -> None:
         if "postgres_db" in self.__dict__:
             await self.postgres_db.close()
@@ -69,3 +80,5 @@ class InfrastructureContainer:
             await self.redis_db.close()
         if "rabbitmq" in self.__dict__:
             await self.rabbitmq.close()
+        if "minio_client" in self.__dict__:
+            await self.minio_client.close()

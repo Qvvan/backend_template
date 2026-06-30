@@ -48,13 +48,8 @@ class PostgresConnectionPool(IDBTransactional):
         self._pool: asyncpg.Pool | None = None
         self._connect_lock = asyncio.Lock()
 
-    @property
-    def _p(self) -> asyncpg.Pool:
-        if self._pool is None:
-            raise RuntimeError("Pool not initialized — call connect() first")
-        return self._pool
 
-    async def connect(self) -> None:
+    async def _connect(self) -> None:
         """Создает пул соединений с БД"""
 
         async def init_connection(connection: asyncpg.Connection) -> None:
@@ -76,7 +71,11 @@ class PostgresConnectionPool(IDBTransactional):
 
     @asynccontextmanager
     async def get_connection(self) -> AsyncGenerator[PoolConnectionProxy, None]:
-        async with self._p.acquire() as conn:
+        if not self._pool:
+            async with self._connect_lock:
+                await self._connect()
+
+        async with self._pool.acquire() as conn:
             yield conn
 
     @asynccontextmanager

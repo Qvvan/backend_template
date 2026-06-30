@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends
 from starlette import status
 from starlette.exceptions import HTTPException
 
-from src.api.dependencies import get_postgres_db, get_rabbitmq, get_redis
+from src.api.dependencies import get_minio, get_postgres_db, get_rabbitmq, get_redis
 from src.interfaces.clients.cache_client.client import ICacheDB
 from src.interfaces.clients.db.connection import IDBTransactional
+from src.interfaces.clients.storage.client import IStorageClient
 from src.interfaces.messaging.client import IAMQPClient
 
 router = APIRouter(prefix="/health", tags=["Health"])
@@ -69,6 +70,23 @@ async def health_check_redis(redis: ICacheDB = Depends(get_redis)) -> dict[str, 
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Redis is unavailable",
+        )
+
+    return {"status": "ok"}
+
+
+@router.get(
+    "/minio",
+    status_code=status.HTTP_200_OK,
+    summary="MinIO dependency health check",
+)
+async def health_check_minio(storage: IStorageClient = Depends(get_minio)) -> dict[str, str]:
+    """Проверка доступности MinIO."""
+    health_status = await storage.health_check()
+    if not health_status:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MinIO is unavailable",
         )
 
     return {"status": "ok"}
