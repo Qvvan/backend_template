@@ -51,6 +51,7 @@ class RabbitMQClient(IAMQPClient):
         vhost: str,
         tls_enabled: bool,
         cert_path: str | None = None,
+        prefetch_count: int = 10,
     ) -> None:
         protocol = "amqp"
         if tls_enabled:
@@ -63,7 +64,7 @@ class RabbitMQClient(IAMQPClient):
         self._tls_enabled: bool = tls_enabled
         self._logger = logger
         self._cert_path: str | None = cert_path
-        self._prefetch_count: int = 10
+        self._prefetch_count: int = prefetch_count
         self._connect_lock = asyncio.Lock()
 
     @property
@@ -154,7 +155,7 @@ class RabbitMQClient(IAMQPClient):
                     payload = model.model_validate(raw)
                     await handler(payload)
                 except Exception as e:
-                    self._logger.error("Message handler failed", error=str(e))
+                    self._logger.error("Message handler failed", error=e)
                     raise
 
         consumer_tag = await queue.consume(on_message)

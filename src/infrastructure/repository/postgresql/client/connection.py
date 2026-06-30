@@ -26,18 +26,18 @@ class PostgresConnectionPool(IDBTransactional):
     )
 
     def __init__(
-        self,
-        *,
-        logger: AppLogger,
-        user: str,
-        password: str,
-        host: str,
-        port: int,
-        database: str,
-        echo: bool = False,
-        pool_size: int = 5,
-        command_timeout: int = 10,
-        statement_cache_size: int = 256,
+            self,
+            *,
+            logger: AppLogger,
+            user: str,
+            password: str,
+            host: str,
+            port: int,
+            database: str,
+            echo: bool = False,
+            pool_size: int = 5,
+            command_timeout: int = 10,
+            statement_cache_size: int = 256,
     ) -> None:
         self._dsn = f"postgresql://{user}:{quote_plus(password)}@{host}:{port}/{database}"
         self._echo = echo
@@ -47,7 +47,6 @@ class PostgresConnectionPool(IDBTransactional):
         self._statement_cache_size = statement_cache_size
         self._pool: asyncpg.Pool | None = None
         self._connect_lock = asyncio.Lock()
-
 
     async def _connect(self) -> None:
         """Создает пул соединений с БД"""

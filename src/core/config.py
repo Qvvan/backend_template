@@ -52,6 +52,7 @@ class RabbitMQConfig(ConfigBase):
     VHOST: str
     TLS_ENABLED: bool
     CERT_PATH: str | None = None
+    PREFETCH_COUNT: int = 10
 
 
 class RedisConfig(ConfigBase):
@@ -82,6 +83,8 @@ class MinIOConfig(ConfigBase):
 
 class Config(ConfigBase):
     """Главный класс конфигурации"""
+
+    model_config = SettingsConfigDict(env_file_encoding="utf-8", extra="ignore", frozen=True)
 
     app: AppConfig = Field(default_factory=AppConfig)  # type: ignore[arg-type]
     logging: LoggingConfig = Field(default_factory=LoggingConfig)  # type: ignore[arg-type]

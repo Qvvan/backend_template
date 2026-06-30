@@ -27,7 +27,6 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         self._logger.info(
             "Incoming request",
             type="request",
-            request_id=request_id,
             method=request.method,
             path=str(request.url.path),
             user_agent=request.headers.get("user-agent", ""),

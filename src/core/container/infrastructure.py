@@ -52,6 +52,7 @@ class InfrastructureContainer:
             vhost=self._config.rabbitmq.VHOST,
             tls_enabled=self._config.rabbitmq.TLS_ENABLED,
             cert_path=self._config.rabbitmq.CERT_PATH,
+            prefetch_count=self._config.rabbitmq.PREFETCH_COUNT,
             logger=self._logger,
         )
 

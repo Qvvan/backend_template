@@ -62,7 +62,9 @@ class AsyncScheduler(IScheduler):
         task = self._tasks.get(name)
         if task:
             try:
-                await asyncio.shield(task)
+                await asyncio.wait_for(asyncio.shield(task), timeout=10.0)
+            except TimeoutError:
+                self._logger.warning("Worker did not stop in time", worker_name=name)
             except Exception as e:
                 self._logger.warning("Worker raised during stop", worker_name=name, error=e)
         self._tasks.pop(name, None)
@@ -88,8 +90,9 @@ class AsyncScheduler(IScheduler):
     async def wait_until_done(self) -> None:
         if not self._tasks:
             return
-        fut = asyncio.gather(*self._tasks.values(), return_exceptions=True)
-        await asyncio.wait_for(fut=fut, timeout=30.0)
+        _, pending = await asyncio.wait(list(self._tasks.values()), timeout=30.0)
+        if pending:
+            raise TimeoutError
 
     async def shutdown(self) -> None:
         self._logger.info("Shutting down scheduler...")

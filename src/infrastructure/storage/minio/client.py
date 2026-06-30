@@ -61,8 +61,11 @@ class MinIOClient(IStorageClient):
 
     async def create_bucket(self, bucket: str) -> None:
         def _create() -> None:
-            if not self._client.bucket_exists(bucket):
+            try:
                 self._client.make_bucket(bucket)
+            except minio.S3Error as e:
+                if e.code not in {"BucketAlreadyOwnedByYou", "BucketAlreadyExists"}:
+                    raise
 
         await asyncio.to_thread(_create)
 

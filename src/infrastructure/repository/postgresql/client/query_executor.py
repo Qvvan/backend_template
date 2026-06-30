@@ -3,14 +3,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from src.infrastructure.repository.postgresql.client.connection import PostgresConnectionPool
+from src.interfaces.clients.db.connection import IDBConnectable
 from src.interfaces.clients.db.query_executor import IQueryExecutor
 
 
 class PostgresQueryExecutor(IQueryExecutor):
     __slots__ = ("_connection_pool",)
 
-    def __init__(self, connection_pool: PostgresConnectionPool) -> None:
+    def __init__(self, connection_pool: IDBConnectable) -> None:
         self._connection_pool = connection_pool
 
     async def fetch(self, query: str, *args: Any) -> list[Mapping[str, Any]]:
