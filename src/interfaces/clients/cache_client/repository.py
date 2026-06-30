@@ -81,11 +81,6 @@ class ICacheRepository(ABC):
         ...
 
     @abstractmethod
-    async def keys(self, pattern: str = "*") -> list[str]:
-        """Получить список ключей по паттерну."""
-        ...
-
-    @abstractmethod
-    async def flush_db(self) -> bool:
-        """Очистить текущую базу данных."""
+    async def scan_keys(self, pattern: str = "*") -> list[str]:
+        """Получить список ключей по паттерну через SCAN (non-blocking)."""
         ...

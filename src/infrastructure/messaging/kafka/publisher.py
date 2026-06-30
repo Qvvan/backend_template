@@ -4,8 +4,8 @@ from collections.abc import Mapping
 from typing import Any
 
 from src.core.logger import AppLogger
-from src.interfaces.messaging.kafka_client import IKafkaClient
-from src.interfaces.messaging.kafka_publisher import IKafkaPublisher
+from src.interfaces.messaging.kafka.client import IKafkaClient
+from src.interfaces.messaging.kafka.publisher import IKafkaPublisher
 
 
 class KafkaMessagePublisher(IKafkaPublisher):

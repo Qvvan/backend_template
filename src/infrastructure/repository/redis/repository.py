@@ -83,10 +83,5 @@ class RedisRepository(ICacheRepository):
         """Уменьшить значение на amount. Возвращает новое значение."""
         return await self._client.decrby(key, amount)
 
-    async def keys(self, pattern: str = "*") -> list[str]:
+    async def scan_keys(self, pattern: str = "*") -> list[str]:
         return [key async for key in self._client.scan_iter(pattern)]
-
-    async def flush_db(self) -> bool:
-        """Очистить текущую базу данных."""
-        await self._client.flushdb()
-        return True

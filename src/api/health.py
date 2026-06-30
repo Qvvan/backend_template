@@ -8,8 +8,8 @@ from src.api.dependencies import get_kafka, get_minio, get_postgres_db, get_rabb
 from src.interfaces.clients.cache_client.client import ICacheDB
 from src.interfaces.clients.db.connection import IDBTransactional
 from src.interfaces.clients.storage.client import IStorageClient
-from src.interfaces.messaging.client import IAMQPClient
-from src.interfaces.messaging.kafka_client import IKafkaClient
+from src.interfaces.messaging.kafka.client import IKafkaClient
+from src.interfaces.messaging.rabbitmq.client import IAMQPClient
 
 router = APIRouter(prefix="/health", tags=["Health"])
 

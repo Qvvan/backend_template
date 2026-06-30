@@ -4,7 +4,7 @@ import asyncio
 
 from src.core.logger import AppLogger
 from src.interfaces.messaging.consumer import IConsumer
-from src.interfaces.messaging.kafka_client import IKafkaClient
+from src.interfaces.messaging.kafka.client import IKafkaClient
 
 
 class KafkaBackendConsumer(IConsumer):

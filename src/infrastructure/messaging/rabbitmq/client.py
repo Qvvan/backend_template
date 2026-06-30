@@ -20,7 +20,7 @@ from aio_pika.abc import (
 from pydantic import BaseModel
 
 from src.core.logger import AppLogger
-from src.interfaces.messaging.client import IAMQPClient
+from src.interfaces.messaging.rabbitmq.client import IAMQPClient
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -89,7 +89,8 @@ class RabbitMQClient(IAMQPClient):
             async with self._connect_lock:
                 if not self._channel:
                     await self.connect()
-        assert self._channel is not None
+        if self._channel is None:
+            raise RuntimeError("RabbitMQ channel not initialized after connect")
 
     def _build_ssl_context(self) -> ssl.SSLContext:
         return ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=self._cert_path)
@@ -167,6 +168,10 @@ class RabbitMQClient(IAMQPClient):
         self._queue_list.clear()
 
     async def health_check(self) -> bool:
-        if self._connection is None or self._connection.is_closed:
+        try:
+            async with asyncio.timeout(5):
+                await self._ensure_connected()
+            return not (self._channel is None or self._channel.is_closed)
+        except Exception as e:
+            self._logger.error("RabbitMQ health check failed", error=e)
             return False
-        return not (self._channel is None or self._channel.is_closed)

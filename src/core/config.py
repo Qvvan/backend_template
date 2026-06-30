@@ -60,19 +60,18 @@ class KafkaConfig(ConfigBase):
 
     model_config = SettingsConfigDict(env_prefix="KAFKA_", frozen=True)
 
-    BOOTSTRAP_SERVERS: str
-    CLIENT_ID: str
-    GROUP_ID: str
-    SECURITY_PROTOCOL: str = "PLAINTEXT"
+    BOOTSTRAP_SERVERS: str = "localhost:9092"
+    CLIENT_ID: str = "backend_template"
+    SECURITY_PROTOCOL: Literal["PLAINTEXT", "SSL", "SASL_PLAINTEXT", "SASL_SSL"] = "PLAINTEXT"
     SASL_MECHANISM: str | None = None
     SASL_USERNAME: str | None = None
     SASL_PASSWORD: SecretStr | None = None
     ENABLE_AUTO_COMMIT: bool = True
-    AUTO_OFFSET_RESET: str = "latest"
+    AUTO_OFFSET_RESET: Literal["latest", "earliest", "none"] = "latest"
 
 
 class RedisConfig(ConfigBase):
-    """Redis cache_client settings"""
+    """Настройки Redis"""
 
     model_config = SettingsConfigDict(env_prefix="REDIS_", frozen=True)
 

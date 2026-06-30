@@ -9,9 +9,11 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from pydantic import BaseModel
 
 from src.core.logger import AppLogger
-from src.interfaces.messaging.kafka_client import IKafkaClient
+from src.interfaces.messaging.kafka.client import IKafkaClient
 
 T = TypeVar("T", bound=BaseModel)
+
+_SASL_PROTOCOLS = frozenset({"SASL_PLAINTEXT", "SASL_SSL"})
 
 
 class KafkaClient(IKafkaClient):
@@ -59,15 +61,24 @@ class KafkaClient(IKafkaClient):
         self._consumer_tasks: dict[str, asyncio.Task[None]] = {}
         self._connect_lock = asyncio.Lock()
 
+    def _build_sasl_kwargs(self) -> dict[str, Any]:
+        if self._security_protocol not in _SASL_PROTOCOLS:
+            return {}
+        return {
+            "sasl_mechanism": self._sasl_mechanism or "PLAIN",
+            "sasl_plain_username": self._sasl_username,
+            "sasl_plain_password": self._sasl_password,
+        }
+
     async def connect(self) -> None:
         """Устанавливает соединение с Kafka (запускает producer)"""
+        if self._producer is not None:
+            return
         self._producer = AIOKafkaProducer(
             bootstrap_servers=self._bootstrap_servers,
             client_id=self._client_id,
             security_protocol=self._security_protocol,
-            sasl_mechanism=self._sasl_mechanism or "PLAIN",
-            sasl_plain_username=self._sasl_username,
-            sasl_plain_password=self._sasl_password,
+            **self._build_sasl_kwargs(),
         )
         await self._producer.start()
 
@@ -76,7 +87,8 @@ class KafkaClient(IKafkaClient):
             async with self._connect_lock:
                 if not self._producer:
                     await self.connect()
-        assert self._producer is not None
+        if self._producer is None:
+            raise RuntimeError("Kafka producer not initialized after connect")
 
     async def close(self) -> None:
         """Закрывает соединение и все consumer'ы"""
@@ -93,7 +105,8 @@ class KafkaClient(IKafkaClient):
         headers: Mapping[str, bytes] | None = None,
     ) -> None:
         await self._ensure_connected()
-        assert self._producer is not None
+        if self._producer is None:
+            raise RuntimeError("Kafka producer not initialized")
         await self._producer.send_and_wait(
             topic,
             value=json.dumps(payload).encode(),
@@ -114,11 +127,9 @@ class KafkaClient(IKafkaClient):
             client_id=self._client_id,
             group_id=group_id,
             security_protocol=self._security_protocol,
-            sasl_mechanism=self._sasl_mechanism or "PLAIN",
-            sasl_plain_username=self._sasl_username,
-            sasl_plain_password=self._sasl_password,
             enable_auto_commit=self._enable_auto_commit,
             auto_offset_reset=self._auto_offset_reset,
+            **self._build_sasl_kwargs(),
         )
         await consumer.start()
         self._consumers[topic] = consumer
@@ -148,12 +159,12 @@ class KafkaClient(IKafkaClient):
         self._consumers.clear()
 
     async def health_check(self) -> bool:
-        if self._producer is None:
-            return False
         try:
             async with asyncio.timeout(5):
-                await self._producer.client.fetch_all_metadata()
+                await self._ensure_connected()
+                if self._producer is not None:
+                    await self._producer.client.fetch_all_metadata()
             return True
         except Exception as e:
-            self._logger.error("Health check failed", error=e)
+            self._logger.error("Kafka health check failed", error=e)
             return False

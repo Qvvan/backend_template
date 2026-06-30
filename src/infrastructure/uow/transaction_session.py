@@ -8,3 +8,13 @@ class TransactionSession:
 
     def __init__(self, tx: IQueryExecutor) -> None:
         self._tx = tx
+
+    @property
+    def executor(self) -> IQueryExecutor:
+        return self._tx
+
+    # Pattern: add one @property per aggregate when UoW spans multiple tables.
+    # Example:
+    #   @property
+    #   def orders(self) -> PostgresOrderRepository:
+    #       return PostgresOrderRepository(self._tx)

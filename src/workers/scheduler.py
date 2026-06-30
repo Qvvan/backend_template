@@ -50,6 +50,7 @@ class AsyncScheduler(IScheduler):
         if not worker:
             return
         if self.is_worker_running(name):
+            self._logger.debug("Worker already running", worker_name=name)
             return
         self._stop_events[name] = asyncio.Event()
         self._tasks[name] = asyncio.create_task(worker.start(self._stop_events[name]))

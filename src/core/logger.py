@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import threading
 from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
+
+_handler_lock = threading.Lock()
 
 request_context: ContextVar[str | None] = ContextVar("request_id", default=None)
 
@@ -43,13 +46,13 @@ class AppLogger:
     def __init__(self, level: str = "INFO") -> None:
         self._level = level.upper()
         self._logger = logging.getLogger("app")
-        self._logger.setLevel(self._level)
-        self._logger.propagate = False
-
-        if not self._logger.handlers:
-            handler = logging.StreamHandler(sys.stdout)
-            handler.setFormatter(JsonFormatter())
-            self._logger.addHandler(handler)
+        with _handler_lock:
+            self._logger.setLevel(self._level)
+            self._logger.propagate = False
+            if not self._logger.handlers:
+                handler = logging.StreamHandler(sys.stdout)
+                handler.setFormatter(JsonFormatter())
+                self._logger.addHandler(handler)
 
     @classmethod
     def set_request_id(cls, request_id: str) -> None:

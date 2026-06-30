@@ -4,10 +4,11 @@ from functools import cached_property
 
 from src.core.config import Config
 from src.core.logger import AppLogger
-from src.infrastructure.messaging.kafka import KafkaClient
-from src.infrastructure.messaging.rabbitmq import RabbitMQClient
+from src.infrastructure.messaging.kafka.client import KafkaClient
+from src.infrastructure.messaging.rabbitmq.client import RabbitMQClient
 from src.infrastructure.repository.postgresql.client.connection import PostgresConnectionPool
 from src.infrastructure.repository.postgresql.client.query_executor import PostgresQueryExecutor
+from src.interfaces.clients.db.query_executor import IQueryExecutor
 from src.infrastructure.repository.redis.client import RedisDB
 from src.infrastructure.storage.minio.client import MinIOClient
 from src.infrastructure.uow.postgres_uow import PostgresUnitOfWork
@@ -74,7 +75,7 @@ class InfrastructureContainer:
         )
 
     @cached_property
-    def postgresql_query_executor(self) -> PostgresQueryExecutor:
+    def postgresql_query_executor(self) -> IQueryExecutor:
         return PostgresQueryExecutor(connection_pool=self.postgres_db)
 
     @cached_property

@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from src.core.logger import AppLogger
-from src.interfaces.messaging.client import IAMQPClient
-from src.interfaces.messaging.publisher import IMessagePublisher
+from src.interfaces.messaging.rabbitmq.client import IAMQPClient
+from src.interfaces.messaging.rabbitmq.publisher import IMessagePublisher
 
 
 class MessagePublisher(IMessagePublisher):
