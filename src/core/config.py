@@ -55,6 +55,22 @@ class RabbitMQConfig(ConfigBase):
     PREFETCH_COUNT: int = 10
 
 
+class KafkaConfig(ConfigBase):
+    """Настройки Kafka"""
+
+    model_config = SettingsConfigDict(env_prefix="KAFKA_", frozen=True)
+
+    BOOTSTRAP_SERVERS: str
+    CLIENT_ID: str
+    GROUP_ID: str
+    SECURITY_PROTOCOL: str = "PLAINTEXT"
+    SASL_MECHANISM: str | None = None
+    SASL_USERNAME: str | None = None
+    SASL_PASSWORD: SecretStr | None = None
+    ENABLE_AUTO_COMMIT: bool = True
+    AUTO_OFFSET_RESET: str = "latest"
+
+
 class RedisConfig(ConfigBase):
     """Redis cache_client settings"""
 
@@ -90,5 +106,6 @@ class Config(ConfigBase):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)  # type: ignore[arg-type]
     postgres: PostgresConfig = Field(default_factory=PostgresConfig)  # type: ignore[arg-type]
     rabbitmq: RabbitMQConfig = Field(default_factory=RabbitMQConfig)  # type: ignore[arg-type]
+    kafka: KafkaConfig = Field(default_factory=KafkaConfig)  # type: ignore[arg-type]
     redis: RedisConfig = Field(default_factory=RedisConfig)  # type: ignore[arg-type]
     minio: MinIOConfig = Field(default_factory=MinIOConfig)  # type: ignore[arg-type]

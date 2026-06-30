@@ -4,6 +4,7 @@ from functools import cached_property
 
 from src.core.config import Config
 from src.core.logger import AppLogger
+from src.infrastructure.messaging.kafka import KafkaClient
 from src.infrastructure.messaging.rabbitmq import RabbitMQClient
 from src.infrastructure.repository.postgresql.client.connection import PostgresConnectionPool
 from src.infrastructure.repository.postgresql.client.query_executor import PostgresQueryExecutor
@@ -57,6 +58,22 @@ class InfrastructureContainer:
         )
 
     @cached_property
+    def kafka(self) -> KafkaClient:
+        return KafkaClient(
+            bootstrap_servers=self._config.kafka.BOOTSTRAP_SERVERS,
+            client_id=self._config.kafka.CLIENT_ID,
+            security_protocol=self._config.kafka.SECURITY_PROTOCOL,
+            sasl_mechanism=self._config.kafka.SASL_MECHANISM,
+            sasl_username=self._config.kafka.SASL_USERNAME,
+            sasl_password=(
+                self._config.kafka.SASL_PASSWORD.get_secret_value() if self._config.kafka.SASL_PASSWORD else None
+            ),
+            enable_auto_commit=self._config.kafka.ENABLE_AUTO_COMMIT,
+            auto_offset_reset=self._config.kafka.AUTO_OFFSET_RESET,
+            logger=self._logger,
+        )
+
+    @cached_property
     def postgresql_query_executor(self) -> PostgresQueryExecutor:
         return PostgresQueryExecutor(connection_pool=self.postgres_db)
 
@@ -81,5 +98,7 @@ class InfrastructureContainer:
             await self.redis_db.close()
         if "rabbitmq" in self.__dict__:
             await self.rabbitmq.close()
+        if "kafka" in self.__dict__:
+            await self.kafka.close()
         if "minio_client" in self.__dict__:
             await self.minio_client.close()
