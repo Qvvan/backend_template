@@ -91,6 +91,7 @@ _SKIP_DIRS = frozenset({".git", ".venv", "node_modules", "__pycache__", ".ruff_c
 _IF = re.compile(r"^\s*(?:#|<!--)\s*\[(if|ifc) (?P<expr>[^\]]+)\]\s*(?:-->)?\s*$")
 _ENDIF = re.compile(r"^\s*(?:#|<!--)\s*\[endif\]\s*(?:-->)?\s*$")
 _EXPR = re.compile(r"^[a-z_ ()]+$")
+_INLINE_MARKER = re.compile(r"\S.*<!--\s*\[(?:if|ifc|endif)\b|<!--\s*\[(?:if|ifc|endif)\b.*-->.*\S")
 
 
 class InitError(Exception):
@@ -130,6 +131,8 @@ def process_regions(text: str, flags: dict[str, bool], source: str = "<text>") -
                 raise InitError(f"{source}:{number}: [endif] without [if]")
             stack.pop()
             continue
+        if _INLINE_MARKER.search(line):
+            raise InitError(f"{source}:{number}: region markers must be on their own line")
         if not stack:
             out.append(line)
         elif stack[-1][0]:

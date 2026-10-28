@@ -57,69 +57,97 @@
 
 ---
 
+
 ## 1. Структура проекта
 
 ```
 backend_template/
 ├── src/
-│   ├── main.py                              # Точка входа — только app factory
+│   ├── main.py                              # API-процесс: create_app(config=None, container=None)
+│   ├── entrypoints/                         # Остальные процессы (composition root)
+│   │   ├── app_builder.py                   # Общая сборка FastAPI: ошибки, request id, /livez, /readyz, /metrics, трейсы
+<!-- [if messaging] -->
+│   │   ├── consumer.py                      # create_consumer_app — консьюмеры RabbitMQ/Kafka
+<!-- [endif] -->
+│   │   └── scheduler.py                     # create_scheduler_app — фоновые воркеры + админка /api/v1/workers
 │   ├── api/                                 # Presentation layer
-│   │   ├── __init__.py                      # Агрегация роутеров
-│   │   ├── dependencies.py                  # FastAPI DI-функции
+│   │   ├── __init__.py                      # router с префиксом /api
+│   │   ├── dependencies.py                  # FastAPI DI-функции (get_<name>_service)
 │   │   ├── exception_handlers.py            # Единственное место перехвата ошибок
-│   │   ├── health.py                        # Health-check endpoints
-│   │   ├── middleware/request_logging.py    # Request ID, логирование запросов
+│   │   ├── health.py                        # /livez, /readyz
+│   │   ├── schemas.py                       # ErrorResponse, health-схемы, DEFAULT/MAX_PAGE_SIZE
+│   │   ├── middleware/request_logging.py    # X-Request-ID, логирование запросов (чистый ASGI)
 │   │   └── v1/
-│   │       ├── __init__.py                  # v1_router
+│   │       ├── __init__.py                  # v1_router (# scaffold:v1-routers)
+│   │       ├── workers.py                   # админка воркеров (подключается только в scheduler)
 │   │       └── schemas/                     # Pydantic схемы запросов/ответов
-│   ├── core/                                # Composition root support
-│   │   ├── config.py                        # Pydantic BaseSettings (только здесь)
-│   │   ├── exceptions.py                    # Иерархия доменных исключений
-│   │   ├── logger.py                        # AppLogger (JSON, ContextVar request_id)
-│   │   └── container/
-│   │       ├── __init__.py                  # Container — главный DI-контейнер
-│   │       ├── infrastructure.py            # InfrastructureContainer
-│   │       ├── repositories.py              # RepositoryContainer
-│   │       ├── services.py                  # ServiceContainer
-│   │       └── workers.py                   # WorkerContainer + AsyncScheduler
-│   ├── domain/entities/                     # Все dataclass-модели и бизнес-логика
+│   ├── core/
+│   │   ├── config.py                        # Pydantic BaseSettings (только здесь), читает .env
+│   │   ├── exceptions.py                    # ErrorCode + иерархия доменных исключений
+│   │   ├── logger.py                        # AppLogger (JSON, request_id, trace_id)
+<!-- [if messaging] -->
+│   │   ├── events.py                        # IntegrationEvent, MessageHeader
+<!-- [endif] -->
+│   │   ├── telemetry.py                     # OpenTelemetry (OTEL_ENABLED)
+│   │   └── container/                       # DI-контейнеры по слоям (cached_property)
+│   ├── domain/entities/                     # Все @dataclass и бизнес-логика (PageEntity, HealthReportEntity, ...)
+<!-- [if messaging] -->
+│   ├── events/                              # Интеграционные события этого сервиса (контракты для других)
+<!-- [endif] -->
 │   ├── infrastructure/
 │   │   ├── http/                            # HTTP-клиенты
-│   │   ├── messaging/
-│   │   │   ├── consumer.py                  # BackendConsumer — маршрутизация очередей
-│   │   │   ├── publisher.py                 # MessagePublisher
-│   │   │   ├── rabbitmq.py                  # RabbitMQClient — транспорт
-│   │   │   └── handlers/                    # Хендлеры (schemas/ + <name>_handler.py)
-│   │   ├── repository/
-│   │   │   ├── postgresql/client/           # connection, query_executor, transaction_executor
-│   │   │   └── redis/                       # client.py (RedisDB), repository.py (RedisRepository)
-│   │   └── uow/                             # postgres_uow.py, transaction_session.py
-│   ├── interfaces/                          # Абстракции — только ABC / Protocol
-│   │   ├── clients/                         # cache_client/, db/
-│   │   ├── messaging/                       # client, consumer, publisher
-│   │   ├── repositories/                    # по одному на агрегат
-│   │   ├── services/
-│   │   └── workers/worker.py                # IWorker
-│   ├── services/                            # Application layer — оркестрация
-│   ├── utils/                               # Утилиты без бизнес-логики
-│   └── workers/scheduler.py                 # AsyncScheduler
+<!-- [if messaging] -->
+│   │   ├── messaging/{rabbitmq,kafka}/      # client.py, consumer.py, publisher.py, handlers/(schemas/)
+<!-- [endif] -->
+│   │   ├── repository/postgresql/           # client/ (pool, executors) + репозитории агрегатов
+<!-- [if redis] -->
+│   │   ├── repository/redis/                # RedisDB, RedisRepository
+<!-- [endif] -->
+<!-- [if minio] -->
+│   │   ├── storage/minio/                   # MinIOClient
+<!-- [endif] -->
+│   │   └── uow/                             # PostgresUnitOfWork, TransactionSession
+│   ├── interfaces/                          # Только ABC / Protocol
+│   ├── services/                            # Application layer
+│   └── workers/                             # AsyncScheduler, PeriodicWorker, воркеры
 ├── migrations/                              # yoyo SQL-миграции
-├── Dockerfile, docker-compose.yml, pyproject.toml, yoyo.ini
+├── tests/                                   # unit/, integration/ (testcontainers), fakes/, factories.py
+├── tools/
+│   ├── scaffold/                            # Генератор кода (make feature / worker / migration ...)
+│   └── check_architecture.py                # Архитектурные правила, которые не ловят линтеры
+├── .claude/                                 # skills (new-feature, new-worker, ...), агенты, hook качества
+├── Dockerfile, docker-compose.yml, Makefile, pyproject.toml, yoyo.ini, .github/workflows/ci.yml
 ```
 
 ---
 
 ## 2. Слои архитектуры
 
-Зависимости строго сверху вниз. Нижний слой **никогда** не знает о верхнем.
+Зависимости строго сверху вниз. Нижний слой **никогда** не знает о верхнем. Границы проверяет import-linter
+(контракты в `pyproject.toml`, `make lint-arch`).
 
 ```
-Presentation     →  src/api/,  src/infrastructure/messaging/handlers/
+Presentation     →  src/api/,  src/infrastructure/messaging/*/handlers/
 Application      →  src/services/
 Domain           →  src/domain/entities/
 Infrastructure   →  src/infrastructure/
-Composition Root →  src/core/container/,  src/main.py
+Composition Root →  src/core/container/,  src/main.py,  src/entrypoints/
 ```
+
+### 2.0 Процессы
+
+Один образ, один `Container`, три процесса — каждый ASGI-приложение с `/livez`, `/readyz`, `/metrics`:
+
+| Процесс | Фабрика | Что делает | Масштабирование |
+|---|---|---|---|
+| api | `src.main:create_app` | HTTP API | горизонтально |
+<!-- [if messaging] -->
+| consumer | `src.entrypoints.consumer:create_consumer_app` | консьюмеры брокеров | горизонтально |
+<!-- [endif] -->
+| scheduler | `src.entrypoints.scheduler:create_scheduler_app` | фоновые воркеры + `/api/v1/workers` | **ровно 1 экземпляр, 1 worker granian** |
+
+API-процесс не запускает фоновую работу. Новый воркер или консьюмер не требует правок в процессах — только
+регистрацию в контейнере (генератор делает её сам).
 
 ### 2.1 ENDPOINTS (`src/api/v1/`)
 
@@ -127,27 +155,18 @@ Composition Root →  src/core/container/,  src/main.py
 - Маппит схему в доменную модель (`@dataclass` из `domain/entities/`).
 - Вызывает **ровно один** сервис. Маппит результат обратно в response-схему.
 - **Без бизнес-логики, без `try/except`** (ошибки ловит только exception_handler).
-- Зависимости — через `Depends()` из `api/dependencies.py`.
+- Зависимости — через `Depends()` из `api/dependencies.py`. ID в пути — `uuid.UUID` (невалидный → 422, а не 500).
 
 ```python
-# src/api/v1/users.py
-from __future__ import annotations
-from fastapi import APIRouter, Depends
-from src.api.dependencies import get_user_service
-from src.api.v1.schemas.user_schemas import CreateUserRequest, UserResponse
-from src.domain.entities.user import UserEntity
-from src.interfaces.services.user_service import IUserService
-
-router = APIRouter(prefix="/users", tags=["Users"])
-
-@router.post("/", response_model=UserResponse, status_code=201)
+# src/api/v1/users.py (так генерирует `make feature`)
+@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     body: CreateUserRequest,
     service: IUserService = Depends(get_user_service),
 ) -> UserResponse:
     entity = UserEntity(name=body.name, email=body.email)
     result = await service.create(entity)
-    return UserResponse(id=result.id, name=result.name, email=result.email)
+    return UserResponse.model_validate(result)
 ```
 
 ```python
@@ -159,65 +178,69 @@ async def create_user(body: CreateUserRequest, db = Depends(get_postgres_db)):
         raise HTTPException(400, "already exists")   # ← бизнес-логика здесь
 ```
 
-> `api/v1/schemas/` пока пуста. При добавлении эндпоинта схемы создаются здесь.
+<!-- [if messaging] -->
+### 2.2 CONSUMERS / HANDLERS (`src/infrastructure/messaging/{rabbitmq,kafka}/`)
 
-### 2.2 CONSUMERS / HANDLERS (`src/infrastructure/messaging/handlers/`)
+- `consumer.py` (`BackendConsumer` / `KafkaBackendConsumer`) — только регистрирует очереди/топики и маршрутизирует.
+  `start()` регистрирует и возвращается, `stop()` отменяет. Никакой логики.
+- Для каждой очереди — **обязательная Pydantic схема** в `handlers/schemas/` (наследник `IntegrationEvent`).
+- Хендлер: схема → `@dataclass` → **ровно один** сервис. Логирует начало и конец. **Без `try/except`.**
+- Клиент передаёт в хендлер уже валидированный объект — повторная валидация запрещена.
+- Сервис консьюмера идемпотентен: `session.inbox.register(message_id, consumer)` в одной транзакции с изменениями
+  (доставка at-least-once).
 
-- `consumer.py` (BackendConsumer) — только регистрирует очереди и маршрутизирует. Никакой логики.
-- Для каждой очереди — **обязательная Pydantic схема** в `handlers/schemas/`.
-- Хендлер: парсит сообщение через схему → маппит в `@dataclass` → вызывает **ровно один** сервис.
-- Логирует только начало и завершение обработки. **Без `try/except`, без бизнес-логики.**
-- RabbitMQClient передаёт в хендлер уже валидированный объект, **не dict** — повторная валидация запрещена.
+Надёжность (делает клиент, не хендлер):
 
-```python
-# src/infrastructure/messaging/handlers/user_handler.py
-from __future__ import annotations
-from src.core.logger import AppLogger
-from src.domain.entities.user import UserEntity
-from src.infrastructure.messaging.handlers.schemas.user_schemas import UserCreatedMessage
-from src.interfaces.services.user_service import IUserService
+| | RabbitMQ | Kafka |
+|---|---|---|
+| Невалидное сообщение | сразу в `<queue>.dlq` | сразу в `<topic>.dlq` |
+| Исключение в хендлере | повторы через `<queue>.retry.N` (TTL = `RABBITMQ_RETRY_DELAYS`), затем `<queue>.dlq` | `KAFKA_MAX_RETRIES` повторов с экспоненциальной задержкой, затем `<topic>.dlq` |
+| Подтверждение | ack после обработки | commit offset после обработки |
+| Заголовки в DLQ | `x-error`, `x-retry-count` | `x-error`, `x-retry-count` |
 
-class UserMessageHandler:
-    __slots__ = ("_service", "_logger")
-
-    def __init__(self, service: IUserService, logger: AppLogger) -> None:
-        self._service = service
-        self._logger = logger
-
-    async def handle_user_created(self, msg: UserCreatedMessage) -> None:
-        entity = UserEntity(id=msg.user_id, name=msg.name, email=msg.email)
-        self._logger.info("Handling user_created", user_id=msg.user_id)
-        await self._service.on_user_created(entity)
-        self._logger.info("user_created handled", user_id=msg.user_id)
-```
+`x-request-id` из заголовков восстанавливается в контексте логгера на время обработки.
 
 ```python
-# Регистрация в consumer.py
+# Регистрация в rabbitmq/consumer.py (так генерирует `make consumer`)
 await self._rabbit.consume(
-    queue_name="user.created",
-    handler=handler.handle_user_created,
-    model=UserCreatedMessage,
-    exchange="users",
-    routing_key="user.created",
+    queue_name="backend_template.order_paid",
+    handler=self._order_paid_handler.handle,
+    model=OrderPaidMessage,
+    exchange=OrderPaidMessage.destination,
+    routing_key=OrderPaidMessage.routing_key,
 )
 ```
+
+### 2.2.1 Публикация событий: outbox
+
+- Событие — наследник `IntegrationEvent` в `src/events/` с `destination` (exchange / topic) и `routing_key`.
+  Это контракт для других сервисов: только добавлять опциональные поля, не переименовывать и не удалять.
+- Событие, связанное с изменением в БД, публикуется **только через outbox** в той же транзакции:
+
+```python
+async with self._uow.begin() as session:
+    saved = await session.orders.save(entity)
+    await session.outbox.add(OrderCreatedEvent.from_entity(saved).to_message())
+```
+
+- `OutboxRelayWorker` (процесс scheduler) публикует записи (`FOR UPDATE SKIP LOCKED`, порядок сохраняется,
+  при ошибке брокера — повтор на следующем тике). Брокер выбирается `MESSAGING_PUBLISHER`.
+- `IMessagePublisher.publish(event)` напрямую — только для событий без изменения БД (не атомарно).
+<!-- [endif] -->
 
 ### 2.3 SERVICES (`src/services/`)
 
 - Знают **последовательность операций**. Зависят только от интерфейсов (`interfaces/`).
 - Поднимают **доменные исключения** из `core/exceptions.py`.
 - Делегируют бизнес-логику в методы `entity`. Сами логику не содержат.
-- **Никогда не получают `Config`.**
-- `IUnitOfWork.begin()` — **только** когда одна операция мутирует **несколько таблиц** атомарно. Запись в одну таблицу или чтение — репозиторий напрямую, без UoW.
+- **Никогда не получают `Config`** (только примитивы, если нужны: `batch_size`, `interval`).
+- `IUnitOfWork.begin()` — **только** когда операция мутирует **несколько таблиц** атомарно. Запись в одну таблицу
+  или чтение — репозиторий напрямую.
+<!-- [if messaging] -->
+- Запись в БД + событие в outbox — тоже через UoW (это две таблицы).
+<!-- [endif] -->
 
 ```python
-# src/services/user_service.py
-from __future__ import annotations
-from src.core.exceptions import ConflictError, NotFoundError
-from src.domain.entities.user import UserEntity
-from src.interfaces.repositories.user_repository import IUserRepository
-from src.interfaces.services.user_service import IUserService
-
 class UserService(IUserService):
     __slots__ = ("_repo",)
 
@@ -229,36 +252,19 @@ class UserService(IUserService):
         if existing:
             raise ConflictError("User with this email already exists")
         return await self._repo.save(entity)
-
-    async def get_by_id(self, user_id: str) -> UserEntity:
-        user = await self._repo.find_by_id(user_id)
-        if not user:
-            raise NotFoundError("User", user_id)
-        return user
-```
-
-```python
-# ЗАПРЕЩЕНО — конфиг в сервисе, валидация вместо entity
-class UserService:
-    def __init__(self, config: Config, ...):   # ← конфиг запрещён
-        ...
-    async def create(self, entity: UserEntity) -> UserEntity:
-        if "@" not in entity.email:             # ← должно быть в entity
-            raise ValidationError("bad email")
 ```
 
 ### 2.4 DOMAIN ENTITIES (`src/domain/entities/`)
 
-- **Только чистая бизнес-логика.** Никакого I/O, никаких внешних зависимостей.
-- **Все `@dataclass` определяются только здесь.** Нигде больше.
-- Никаких исключений, никакой обработки ошибок, никаких импортов из `infrastructure`/`services`/`api`.
+- **Только чистая бизнес-логика.** Никакого I/O, никаких внешних зависимостей (pydantic, драйверы — тоже нельзя).
+- **Все `@dataclass` определяются только здесь.**
+- Никаких исключений, никакой обработки ошибок, никаких импортов из других слоёв.
+- Общие: `PageEntity[T]` (пагинация), `HealthReportEntity`.
+<!-- [if messaging] -->
+- `OutgoingMessage` — сериализованное событие для outbox и брокера.
+<!-- [endif] -->
 
 ```python
-# src/domain/entities/user.py
-from __future__ import annotations
-from dataclasses import dataclass, field
-import uuid
-
 @dataclass
 class UserEntity:
     name: str
@@ -269,147 +275,66 @@ class UserEntity:
         return "@" in self.email and "." in self.email.split("@")[-1]
 ```
 
-> `domain/entities/` пока пуста. Все новые `@dataclass` — здесь.
-
 ### 2.5 REPOSITORIES (`src/infrastructure/repository/`)
 
-- Знают только **SQL-запросы**. Принимают `IQueryExecutor` или `PostgresTransactionExecutor`.
-- Запрос → `query_executor` → маппинг в `@dataclass` из `domain/entities/` → возврат.
-- **Никакой бизнес-логики, никакой обработки ошибок.** Интерфейс — в `interfaces/repositories/`.
-- Один репозиторий = один агрегат.
-
-```python
-# src/infrastructure/repository/postgresql/user_repository.py
-from __future__ import annotations
-from collections.abc import Mapping
-from typing import Any
-from src.domain.entities.user import UserEntity
-from src.interfaces.clients.db.query_executor import IQueryExecutor
-from src.interfaces.repositories.user_repository import IUserRepository
-
-class PostgresUserRepository(IUserRepository):
-    __slots__ = ("_executor",)
-
-    def __init__(self, executor: IQueryExecutor) -> None:
-        self._executor = executor
-
-    async def find_by_id(self, user_id: str) -> UserEntity | None:
-        row = await self._executor.fetchrow(
-            "SELECT id, name, email FROM users WHERE id = $1", user_id
-        )
-        return self._map(row) if row else None
-
-    async def save(self, entity: UserEntity) -> UserEntity:
-        row = await self._executor.fetchrow(
-            "INSERT INTO users (id, name, email) VALUES ($1, $2, $3) RETURNING *",
-            entity.id, entity.name, entity.email,
-        )
-        return self._map(row)  # type: ignore[arg-type]
-
-    @staticmethod
-    def _map(row: Mapping[str, Any]) -> UserEntity:
-        return UserEntity(id=row["id"], name=row["name"], email=row["email"])
-```
+- Знают только **SQL-запросы**. Принимают `IQueryExecutor` (вне транзакции — `PostgresQueryExecutor`,
+  внутри UoW — `PostgresTransactionExecutor` через `TransactionSession`).
+- Запрос → executor → маппинг в `@dataclass` → возврат. **Никакой бизнес-логики, никакой обработки ошибок.**
+- Один репозиторий = один агрегат. `json/jsonb` колонки принимают и возвращают dict (кодек в пуле),
+  `uuid` — строки.
+- Для работы в UoW агрегат добавляется свойством в `ITransactionSession` и `TransactionSession`
+  (генератор делает это сам: `session.<plural>`).
 
 ```python
 # ЗАПРЕЩЕНО — фильтрация (бизнес-логика) и обработка ошибок в репозитории
 async def find_active_users(self) -> list[UserEntity]:
     rows = await self._executor.fetch("SELECT * FROM users")
     return [u for u in rows if u["is_active"]]   # ← фильтрация = бизнес-логика
-# UniqueViolation → ConflictError — это задача сервиса, не репозитория
 ```
 
-### 2.6 WORKERS (`src/workers/`, `src/interfaces/workers/`)
+### 2.6 WORKERS (`src/workers/`)
 
-- Реализуют `IWorker`. `start(stop: asyncio.Event)` — единственная точка входа.
-- Вызывают **один сервис** по расписанию/триггеру. Логируют старт, стоп, причину остановки.
+- Периодические воркеры наследуют `PeriodicWorker`: определяют `name` и `tick()`, где ровно один вызов сервиса.
+  База сама логирует старт/стоп, ловит и логирует исключение тика, прерывает паузу по stop-событию.
 - **Никакой бизнес-логики, никакого прямого обращения к БД/кэшу, никакого `Config`.**
-- Регистрируются в `WorkerContainer`, передаются в `AsyncScheduler` (`start()` запускает как Tasks, `shutdown()` — graceful с таймаутом 30 сек).
+- Регистрация — в `WorkerContainer` (`# scaffold:workers`); запускает их только процесс scheduler.
 
 ```python
-# src/workers/cleanup_worker.py
-class CleanupWorker(IWorker):
-    __slots__ = ("_service", "_logger", "_interval")
+class CleanupWorker(PeriodicWorker):
+    __slots__ = ("_service",)
 
-    def __init__(self, service: ICleanupService, logger: AppLogger, interval: int) -> None:
+    def __init__(self, service: ICleanupService, logger: AppLogger, interval: float) -> None:
+        super().__init__(logger=logger, interval=interval)
         self._service = service
-        self._logger = logger
-        self._interval = interval
 
     @property
     def name(self) -> str:
-        return "cleanup_worker"
+        return "cleanup"
 
-    async def start(self, stop: asyncio.Event) -> None:
-        self._logger.info("CleanupWorker started")
-        while not stop.is_set():
-            await self._service.run_cleanup()
-            await asyncio.wait_for(asyncio.shield(stop.wait()), self._interval)
-        self._logger.info("CleanupWorker stopped")
+    async def tick(self) -> None:
+        await self._service.run()
 ```
 
-### 2.7 COMPOSITION ROOT (`src/core/container/`, `src/main.py`)
+### 2.7 COMPOSITION ROOT (`src/core/container/`, `src/main.py`, `src/entrypoints/`)
 
 - **Единственное место, где используется `Config`.** Конфиг не передаётся ни в один слой.
-- Зависимости собираются через `cached_property`. `close()` закрывает соединение только если оно открыто (проверка `"name" in self.__dict__`).
+- Зависимости собираются через `cached_property`. `close()` закрывает только созданное (`"name" in self.__dict__`).
+- Фабрики процессов принимают `(config, container)` — тесты подменяют их целиком.
+- Маркеры `# scaffold:<name>` — места, куда генератор вставляет код. Не удалять и не дублировать.
 
 **Config (`src/core/config.py`):**
-- Все секции — `frozen=True` (защита от мутации в рантайме).
-- Секреты — только `SecretStr`; значение — `.get_secret_value()`. Нельзя передавать `SecretStr` в строку/SQL напрямую.
-- Чтение из env через `SettingsConfigDict(env_prefix=..., frozen=True)`. Никакого `os.getenv()` вне `config.py`.
+- Все секции — `frozen=True`; секреты — только `SecretStr` (`.get_secret_value()` только в контейнере).
+- Источники: переменные окружения, затем `.env` (переменные окружения важнее). Никакого `os.getenv()`.
 
-```python
-# ПРАВИЛЬНО
-class PostgresConfig(ConfigBase):
-    model_config = SettingsConfigDict(env_prefix="POSTGRES_", frozen=True)
-    PASSWORD: SecretStr
-# в контейнере — единственное место получения значения:
-PostgresConnectionPool(password=self._config.postgres.PASSWORD.get_secret_value(), ...)
+### 2.8 ОШИБКИ API (`src/api/exception_handlers.py`)
 
-# ЗАПРЕЩЕНО: PASSWORD: str (утечёт в логи/repr) | os.getenv() вне config.py
-```
+- **Единственное место** перехвата исключений на уровне presentation. Каждый ответ с ошибкой:
+  `{"status": "error", "code": ..., "comment": ..., "obj": ..., "request_id": ...}` (`ErrorResponse`).
+- `AppError` → свой HTTP-статус и `ErrorCode`; ошибки валидации запроса → 422, `obj` = список
+  `{loc, msg, type}`; `HTTPException` (в т.ч. 404 роутинга) → тот же формат; любое другое исключение → 500
+  `INTERNAL_ERROR` без деталей (детали — в логе с тем же `request_id`).
+- Новое доменное исключение наследует `AppError` и получает значение `ErrorCode`.
 
-```python
-# src/core/container/__init__.py
-class Container:
-    __slots__ = ("config", "infra", "logger", "repos", "services", "workers")
-
-    def __init__(self, config: Config) -> None:
-        self.config = config
-        self.logger = AppLogger(level=config.logging.LEVEL)
-        self.infra = InfrastructureContainer(config, self.logger)
-        self.repos = RepositoryContainer(self.infra)
-        self.services = ServiceContainer(config=config, infra=self.infra, repos=self.repos)
-        self.workers = WorkerContainer(logger=self.logger, services=self.services)
-
-    async def closer(self) -> None:
-        await self.workers.close()
-        await self.infra.close()
-```
-
-```python
-# src/api/dependencies.py
-def get_postgres_db(request: Request) -> IDBTransactional:
-    return request.app.state.container.infra.postgres_db
-```
-
-### 2.8 EXCEPTION HANDLER (`src/api/exception_handlers.py`)
-
-- **Единственное место** перехвата исключений на уровне presentation.
-- Возвращает `ORJSONResponse` единообразной структуры.
-- Новое доменное исключение **обязано** быть зарегистрировано в `register_errors()`.
-
-```python
-def register_errors(app: FastAPI) -> None:
-    @app.exception_handler(AppError)
-    async def handle_app_error(req: Request, exc: AppError) -> ORJSONResponse:
-        return ORJSONResponse(
-            status_code=exc.http_status_code,
-            content={"status": "error", "code": exc.code, "comment": exc.message, "obj": None},
-        )
-```
-
-Иерархия (`src/core/exceptions.py`):
 ```
 AppError             → HTTP 500 (базовое)
 ├── DatabaseError    → HTTP 500
@@ -420,60 +345,41 @@ AppError             → HTTP 500 (базовое)
 
 ### 2.9 INTERFACES (`src/interfaces/`)
 
-- Только `ABC` / `Protocol`. Никаких конкретных классов.
-- **Никаких импортов из `infrastructure`** (asyncpg, aioredis) — нарушение = дизайн-дефект.
-- Интерфейсы репозиториев — `interfaces/repositories/`, сервисов — `interfaces/services/`.
-
-| Интерфейс | Файл | Реализация |
-|---|---|---|
-| `IAMQPClient` | `messaging/client.py` | `RabbitMQClient` |
-| `IMessagePublisher` | `messaging/publisher.py` | `MessagePublisher` |
-| `IConsumer` | `messaging/consumer.py` | `BackendConsumer` |
-| `ICacheDB` | `clients/cache_client/client.py` | `RedisDB` |
-| `ICacheRepository` | `clients/cache_client/repository.py` | `RedisRepository` |
-| `IDBTransactional` | `clients/db/connection.py` | `PostgresConnectionPool` |
-| `IQueryExecutor` | `clients/db/query_executor.py` | `Postgres{Query,Transaction}Executor` |
-| `IUnitOfWork` | `clients/db/uow.py` | `PostgresUnitOfWork` |
-| `IWorker` | `workers/worker.py` | кастомные воркеры |
-
-**`health_check() -> bool`** обязателен в каждом инфра-клиенте (`PostgresConnectionPool`, `RedisDB`, `RabbitMQClient`). Возвращает `True` если соединение живо, `False` при любой ошибке — без исключений наружу. Используется в `api/health.py`.
-
-```python
-async def health_check(self) -> bool:
-    try:
-        async with asyncio.timeout(5):
-            async with self.get_connection() as conn:
-                await conn.execute("SELECT 1")
-        return True
-    except Exception as e:
-        self._logger.error("Health check failed", error=e)
-        return False
-```
+- Только `ABC` / `Protocol`. Никаких импортов из `infrastructure` и драйверов (import-linter).
+- `health_check() -> bool` обязателен в каждом инфра-клиенте: `True`, если соединение живо, `False` при любой
+  ошибке, без исключений наружу. Клиенты для `/readyz` перечислены в `ServiceContainer.health`.
 
 ---
 
-## 3. Запрещено — полный список
+## 3. Правила и кто их проверяет
 
-| # | Нарушение | Где нельзя |
+Нарушение правил с пометкой «авто» роняет `make check`, pre-commit, CI и hook Claude после правки файла.
+
+| # | Правило | Проверяет |
 |---|---|---|
-| 1 | `Config` за пределами `container/` и `main.py` | Везде кроме Container |
-| 2 | Бизнес-логика (условия, вычисления, правила) | Endpoints, Handlers, Workers, Repositories |
-| 3 | Два+ вызова сервисов в одном эндпоинте/хендлере | Endpoints, Handlers |
-| 4 | `try/except` в эндпоинтах и хендлерах | Endpoints, Handlers |
-| 5 | `@dataclass` вне `src/domain/entities/` | Везде кроме domain |
-| 6 | Голые типы: `list`, `dict`, `Any` без параметров | Везде |
-| 7 | Магические строки/числа без `Enum` | Везде |
-| 8 | Зависимость от конкретного класса вместо `ABC`/`Protocol` | Services, Handlers, Workers |
-| 9 | Blocking I/O (синхронные БД, файлы, HTTP) | Везде |
-| 10 | Импорт infra-типов (asyncpg, aioredis) в `interfaces/` | Interfaces |
-| 11 | Прямое обращение к БД/кэшу в воркере | Workers |
-| 12 | Логика маршрутизации сообщений вне `consumer.py` | — |
-| 13 | Отсутствие Pydantic-схемы для очереди | Handlers |
-| 14 | Несколько агрегатов в одном репозитории | Repositories |
-| 15 | Отсутствие `from __future__ import annotations` | Все `.py` |
-| 16 | Отсутствие возвращаемого типа на методе | Все классы |
-| 17 | `print()` вместо `logger.*()` | Везде |
-| 18 | f-строки в аргументе `message` логгера | Везде |
+| 1 | `Config` только в composition root | авто: import-linter |
+| 2 | Бизнес-логика только в entity/service | ревью |
+| 3 | Ровно один вызов сервиса в эндпоинте/хендлере | авто: `ARCH003` |
+| 4 | Нет `try/except` в эндпоинтах и хендлерах | авто: `ARCH002` |
+| 5 | `@dataclass` только в `src/domain/entities/` | авто: `ARCH001` |
+| 6 | Нет голых `list`/`dict`/`tuple` без параметров | авто: pyright `reportMissingTypeArgument` |
+| 7 | Нет магических строк/чисел — `Enum`/константы | ревью |
+| 8 | Зависимость от интерфейсов, не от реализаций | авто: import-linter (services, workers, api) |
+| 9 | Нет blocking I/O | ревью (синхронный SDK — только через `asyncio.to_thread`) |
+| 10 | Нет драйверов в `interfaces/` | авто: import-linter |
+| 11 | Воркер не ходит в БД/кэш напрямую | авто: import-linter |
+<!-- [if messaging] -->
+| 12 | Маршрутизация сообщений только в `consumer.py` | ревью |
+| 13 | Pydantic-схема для каждой очереди | ревью (генератор создаёт) |
+<!-- [endif] -->
+| 14 | Один агрегат на репозиторий | ревью |
+| 15 | `from __future__ import annotations` в каждом модуле | авто: ruff I002 (добавляет сам) |
+| 16 | Возвращаемый тип у каждой функции/метода | авто: ruff ANN20x |
+| 17 | `print()` запрещён | авто: ruff T201 |
+| 18 | f-строки/`%`/`.format` в сообщении лога запрещены | авто: ruff G |
+
+Подавление — только точечно и с причиной: `# arch: ignore — <почему>`, `# noqa: <код>  # <почему>`,
+`# type: ignore[код]  # <почему>`.
 
 ---
 
@@ -483,13 +389,14 @@ async def health_check(self) -> bool:
 |---|---|---|
 | Файлы | `snake_case` | `query_executor.py` |
 | Классы | `PascalCase` | `PostgresConnectionPool` |
-| Интерфейсы | `I` + `PascalCase` | `IAMQPClient` |
+| Интерфейсы | `I` + `PascalCase` | `IUnitOfWork` |
 | Методы / приватные | `snake_case` / `_snake_case` | `health_check()`, `_ensure_connected()` |
-| Enum-константы | `UPPER_CASE` / `PascalCase` (StrEnum) | `AMQPExchangeType.Topic` |
+| Enum-константы | `UPPER_CASE` | `ErrorCode.NOT_FOUND` |
 | Контейнеры | `<Name>Container` | `InfrastructureContainer` |
 | Сервисы / Репозитории | `<Name>Service` / `<Driver><Name>Repository` | `UserService`, `PostgresUserRepository` |
-| Хендлеры / Воркеры | `<Name>Handler` / `<Name>Worker` | `UserMessageHandler`, `CleanupWorker` |
-| Схемы req/resp/msg | `<Action><Entity>Request` / `<Entity>Response` / `<Event>Message` | `CreateUserRequest`, `UserResponse`, `UserCreatedMessage` |
+| Хендлеры / Воркеры | `<Name>Handler` / `<Name>Worker` | `OrderPaidHandler`, `CleanupWorker` |
+| Схемы req/resp/msg | `<Action><Entity>Request` / `<Entity>Response` / `<Event>Message` | `CreateUserRequest`, `UserResponse`, `OrderPaidMessage` |
+| События | `<Entity><Past>Event` | `OrderCreatedEvent` |
 | Entity / Роутеры | `<Name>Entity` / `<name>_router` | `UserEntity`, `v1_router` |
 
 ---
@@ -499,286 +406,157 @@ async def health_check(self) -> bool:
 ### 5.1 Типизация
 
 ```python
-from __future__ import annotations          # обязателен в каждом файле
-from collections.abc import Mapping
-from typing import Any
-
-# ПРАВИЛЬНО — параметризованные типы, явный возврат
 async def fetchrow(self, query: str, *args: Any) -> Mapping[str, Any] | None: ...
 async def fetch(self, query: str, *args: Any) -> list[Mapping[str, Any]]: ...
-
-# ЗАПРЕЩЕНО — нет типов, голые list/dict/Any
-async def fetchrow(self, query, *args): ...
-async def process(self, data: Any) -> dict: ...
 ```
 
 ### 5.2 `__slots__`
 
-Все классы обязаны иметь `__slots__`, **кроме классов с `cached_property`** (дескриптор требует `__dict__`). Исключение — только контейнеры (`Infrastructure/Repository/Service/WorkerContainer`).
-
-```python
-# ПРАВИЛЬНО
-class UserService(IUserService):
-    __slots__ = ("_repo",)
-    def __init__(self, repo: IUserRepository) -> None:
-        self._repo = repo
-
-# ПРАВИЛЬНО — контейнер без __slots__
-class InfrastructureContainer:
-    @cached_property
-    def postgres_db(self) -> PostgresConnectionPool: ...
-
-# ЗАПРЕЩЕНО — __slots__ на классе с cached_property (сломает его); забыть __slots__ на обычном классе
-```
+Все классы обязаны иметь `__slots__`, **кроме классов с `cached_property`** (контейнеры) и pydantic-моделей.
 
 ### 5.3 Зависимости через интерфейс
 
 ```python
-# ПРАВИЛЬНО — зависимость от IAMQPClient
-class BackendConsumer(IConsumer):
-    def __init__(self, *, rabbit: IAMQPClient, logger: AppLogger, stop: asyncio.Event) -> None:
-        self._rabbit = rabbit
-
-# ЗАПРЕЩЕНО — зависимость от конкретного RabbitMQClient
+class OrderService(IOrderService):
+    def __init__(self, repo: IOrderRepository, uow: IUnitOfWork) -> None: ...   # не PostgresOrderRepository
 ```
 
 ### 5.4 UnitOfWork
 
-UoW нужен **только** когда одна операция мутирует несколько таблиц атомарно. `TransactionSession` хранит `IQueryExecutor` в `_tx` и отдаёт репозитории через `@property`.
-
 ```python
-# ПРАВИЛЬНО — одна таблица: напрямую
+# одна таблица — напрямую
 async def create(self, entity: UserEntity) -> UserEntity:
     return await self._repo.save(entity)
 
-# ПРАВИЛЬНО — две таблицы атомарно: UoW обязателен
+# две таблицы (или запись + событие) — UoW обязателен
 async def place(self, order: OrderEntity) -> OrderEntity:
     async with self._uow.begin() as session:
         result = await session.orders.save(order)
         await session.inventory.decrement(order.item_id, order.qty)
         return result
-
-# ЗАПРЕЩЕНО — UoW ради одной таблицы (избыточно) | две таблицы без транзакции (потеря при сбое)
 ```
 
 ### 5.5 Enum вместо магических строк
 
 ```python
-from enum import StrEnum
-
-class AMQPExchangeType(StrEnum):
-    Direct = "direct"
-    Fanout = "fanout"
-    Topic = "topic"
-    Headers = "headers"
-
-await client.consume(exchange_type=AMQPExchangeType.Topic)   # не "topic"
+raise AppError("Payment provider rejected the card", code=ErrorCode.CONFLICT)
+await client.consume(..., exchange_type=AMQPExchangeType.Topic)   # не "topic"
 ```
 
 ### 5.6 Логирование
 
-- Только методы `AppLogger` (`debug/info/warning/error/critical`), **никогда `print()`**.
-- Сообщение всегда статическое; переменные — именованными полями (`**fields`), попадают в JSON отдельными ключами. **Никаких f-строк и `%s` в `message`.**
-- `logger.error()` — **внутри `except`** (тогда `exc_info` подхватывается автоматически); снаружи — `warning`/`info`.
-- Логируем значимые события (старт/конец, аномалии), не каждый SQL-запрос.
+- Только `AppLogger` (`debug/info/warning/error/critical`). Сообщение статическое, переменные — `**fields`.
+- `logger.error()` — **внутри `except`** (тогда `exc_info` подхватывается сам); снаружи — `warning`/`info`.
+- В каждой записи автоматически: `request_id` (HTTP `X-Request-ID` или заголовок сообщения), `trace_id`/`span_id`
+  при включённом OpenTelemetry. Пробы и `/metrics` не логируются.
 
 ```python
-# ПРАВИЛЬНО
-self._logger.info("User created", user_id=entity.id, email=entity.email)
-try:
-    await self._repo.save(entity)
-except Exception:
-    self._logger.error("Failed to save user", user_id=entity.id)
-    raise
-
-# ЗАПРЕЩЕНО
-self._logger.info(f"User {entity.id} created")     # f-строка
-print(f"User {entity.id} created")                 # print
-self._logger.info("User %s created", entity.id)    # позиционное форматирование
+self._logger.info("User created", user_id=entity.id)
 ```
 
 ### 5.7 Double-check lock для lazy connect
 
-Инфра-клиенты с ленивым подключением — `asyncio.Lock` с двойной проверкой (предотвращает race при параллельных корутинах). `_connect_lock = asyncio.Lock()` — в `__init__` и `__slots__`.
-
 ```python
-# ПРАВИЛЬНО — RabbitMQClient, PostgresConnectionPool
 async def _ensure_connected(self) -> None:
     if not self._channel:                   # быстрая проверка без лока
         async with self._connect_lock:
             if not self._channel:           # повторная проверка под локом
                 await self.connect()
-
-# ЗАПРЕЩЕНО — лок на каждый вызов | вообще без лока (race condition)
 ```
 
-### 5.8 `asyncio.timeout()` vs `asyncio.wait_for()` (Python 3.12+)
+### 5.8 `asyncio.timeout()` vs `asyncio.wait_for()`
 
-- `asyncio.timeout()` — простой кейс, ошибка остаётся внутри блока (напр. `health_check`).
-- `asyncio.wait_for()` — когда `TimeoutError` нужно поймать снаружи или применить к группе задач (напр. `AsyncScheduler.shutdown()` с таймаутом на `gather`).
+- `asyncio.timeout()` — простой кейс внутри блока (`health_check`).
+- `asyncio.wait_for()` — когда `TimeoutError` ловится снаружи или таймаут на группу задач.
 
 ### 5.9 Graceful shutdown
 
-```python
-class WorkerContainer:
-    @cached_property
-    def scheduler(self) -> AsyncScheduler:
-        return AsyncScheduler(logger=self._logger, workers=[])
-
-    def start(self) -> None:
-        self.scheduler.start()
-
-    async def close(self) -> None:
-        await self.scheduler.shutdown()   # ждёт все воркеры, таймаут 30 сек
-```
+Каждый процесс закрывает ресурсы в lifespan (`container.closer()`): сначала прекращается приём новой работы,
+воркеры получают stop-событие (`AsyncScheduler.shutdown()`, таймаут 30 сек), затем закрываются клиенты; трейсы
+досылаются (`shutdown_tracing()`).
 
 ---
 
 ## 6. Порядок добавления новой фичи
 
-Создавай снизу вверх по слоям:
+**Генератор делает все слои сразу** (и тесты, и регистрацию):
 
-1. `domain/entities/` — `@dataclass`
-2. `interfaces/repositories/` — ABC репозитория
-3. `interfaces/services/` — ABC сервиса
-4. `infrastructure/repository/postgresql/` — реализация репозитория
-5. `services/` — реализация сервиса
-6. `api/v1/schemas/` — Pydantic схемы
-7. `api/v1/` — эндпоинт
-8. `core/container/` — регистрация в контейнере
-9. `api/dependencies.py` — DI-функция
+```bash
+make feature name=order fields="title:str amount:int note:str?"      # CRUD, миграция, тесты
+<!-- [if messaging] -->
+make feature name=order fields="..." events=1                        # + события через outbox
+make consumer name=order_paid broker=rabbitmq fields="order_id:str"  # идемпотентный консьюмер
+<!-- [endif] -->
+make worker name=cleanup interval=60                                 # периодический воркер
+make migration name=add_status_to_orders                             # пустая миграция с верным номером
+```
 
-> Сейчас пусты: `domain/entities/`, `services/`, `interfaces/{repositories,services}/`, `api/v1/schemas/`, `messaging/handlers/` (+ их `schemas/`), `infrastructure/http/`.
+Типы полей: `str int float bool datetime date`, `?` — nullable. Ничего не пишется, если файл уже есть или маркер
+не найден. После генерации: бизнес-правила — в entity, проверки — в сервисе, `make check`.
+
+Порядок слоёв (если вручную): entity → интерфейс репозитория → интерфейс сервиса → репозиторий → сервис →
+схемы → эндпоинт → контейнер → `dependencies.py` → миграция → тесты.
 
 ---
 
 ## 7. Тестирование
 
-```toml
-# pyproject.toml
-[tool.pytest.ini_options]
-asyncio_mode = "auto"                 # async-тесты без декоратора
-testpaths = ["tests"]
-addopts = "-m 'not integration'"      # интеграционные отключены по умолчанию
-markers = ["integration: require running infrastructure"]
-```
-
 ```
 tests/
-├── conftest.py
-├── unit/services/          # без I/O, репозитории — AsyncMock
-└── integration/            # testcontainers (Postgres/Redis/RabbitMQ)
-    └── conftest.py         # фикстуры контейнеров, scope="session"
+├── conftest.py            # logger, container, api_app, api_client
+├── factories.py           # make_config() — Config без переменных окружения
+├── fakes/                 # in-memory реализации интерфейсов: UoW, репозитории фич и др.
+├── unit/                  # без I/O: сервисы, API (api_app + dependency_overrides), воркеры, tools
+└── integration/           # testcontainers: Postgres (+миграции), брокеры, Redis
 ```
 
-**Юнит** — только entities и services. Репозитории через `AsyncMock`. Без реальных соединений. Именование: `test_<метод>_<условие>_<результат>`.
+- **Юнит** — сервисы на fakes (или `AsyncMock`), API через `api_app.dependency_overrides[get_x_service]`.
+  Именование: `test_<метод>_<условие>_<результат>`.
+- **Интеграционные** — `pytest -m integration` (`make test-integration`), нужен Docker. Postgres-фикстура
+  применяет **все** миграции из `migrations/`; `db_executor` откатывает транзакцию после каждого теста.
 
 ```python
 async def test_create_raises_conflict_when_email_exists() -> None:
-    repo = AsyncMock()
-    repo.find_by_email.return_value = UserEntity(name="existing", email="a@b.com")
-    service = UserService(repo=repo)
+    repo = InMemoryUserRepository()
+    await repo.save(UserEntity(name="existing", email="a@b.com"))
     with pytest.raises(ConflictError):
-        await service.create(UserEntity(name="new", email="a@b.com"))
-```
-
-**Интеграционные** — `testcontainers`, обязательный `@pytest.mark.integration`, запуск `pytest -m integration`. Фикстуры контейнеров — `tests/integration/conftest.py`, `scope="session"`.
-
-```python
-@pytest.mark.integration
-async def test_save_and_find_user(postgres_pool: PostgresConnectionPool) -> None:
-    executor = PostgresQueryExecutor(connection_pool=postgres_pool)
-    repo = PostgresUserRepository(executor=executor)
-    saved = await repo.save(UserEntity(name="Ivan", email="ivan@example.com"))
-    found = await repo.find_by_id(saved.id)
-    assert found is not None and found.email == "ivan@example.com"
+        await UserService(repo=repo).create(UserEntity(name="new", email="a@b.com"))
 ```
 
 ---
 
 ## 8. Миграции (yoyo)
 
-```ini
-# yoyo.ini
-[DEFAULT]
-sources = migrations
-migration_table = _yoyo_migration
-batch_mode = off
-verbosity = 0
-```
-
-**Именование:** `<NNNN>_<snake_case_описание>.py` — 4 цифры с ведущими нулями, описание строчными буквами и подчёркиваниями (`0001_create_users_table.py`).
-
-**Структура файла:**
-```python
-from yoyo import step
-
-__depends__ = {"0001_create_users_table"}   # имена предыдущих миграций без .py; первая — set()
-
-steps = [
-    step(
-        "CREATE TABLE orders (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), ...);",  # apply
-        "DROP TABLE orders;",                                                          # rollback (обязателен)
-    ),
-]
-```
-> Первая миграция: `__depends__ = set()`. `{}` — это пустой dict, не множество; не используй.
-
-Первый аргумент `step()` — apply, второй — rollback (**обязателен**). Один `step` = одна логическая операция; несколько в файле — когда относятся к одной фиче.
-
-**Запуск:**
-```bash
-docker compose --profile migrate up migrate                                   # локально
-yoyo apply --batch --database "postgresql://user:pass@host/db" ./migrations   # вручную/CI
-```
-Сервис `migrate` поднимается только с `--profile migrate` и зависит от healthcheck `db`.
+- Имя: `<NNNN>_<snake_case>.py`; создавать `make migration name=...` (номер и `__depends__` проставятся сами).
+- Первый аргумент `step()` — apply, второй — rollback (**обязателен**). Применённые миграции не редактировать.
+- Применить: `make migrate` (docker compose) или `yoyo apply --batch --database postgresql://... ./migrations`.
+- В docker compose сервис `migrate` выполняется перед стартом приложения (`make up`).
 
 ---
 
 ## 9. Инструменты
 
-### Ruff (`pyproject.toml`)
-```toml
-[tool.ruff]
-line-length = 120
-target-version = "py312"
-fix = true
+| Команда | Что делает |
+|---|---|
+| `make help` | Все команды |
+| `make up` / `make watch` / `make down` | Весь стек в docker compose / с hot reload / остановить |
+| `make run-api`, `make run-scheduler` | Процессы локально с hot reload (инфраструктура: `make infra`) |
+<!-- [if messaging] -->
+| `make run-consumer` | Консьюмеры локально с hot reload |
+<!-- [endif] -->
+| `make check` | ruff, format, pyright, import-linter, архитектурные правила, юнит-тесты — то же, что CI |
+| `make fix` | Автоисправление ruff + форматирование |
+| `make test-integration` | Интеграционные тесты (Docker) |
 
-[tool.ruff.lint]
-select = ["E","W","F","I","N","UP","B","C4","ARG","SIM","PTH","RET","RUF","PL"]
-ignore = ["PLR0913","PLR2004","B008","RUF003","RUF002"]   # B008 нужен для Depends() в дефолтах
+- `pyright` проверяет `src`, `tests`, `tools`; ошибки — блокер.
+- pre-commit (`make pre-commit-install`) запускает те же инструменты через `uv run` — версии из `uv.lock`.
+- Claude Code: после каждой правки `.py` hook `.claude/hooks/python-quality.sh` прогоняет ruff (с автофиксом),
+  pyright и архитектурные правила по файлу и возвращает ошибки. Скиллы: `new-feature`, `new-worker`,
+  `new-migration`.
+<!-- [if messaging] -->
+- Скилл `new-consumer` — консьюмер сообщений через генератор.
+<!-- [endif] -->
+- CI (`.github/workflows/ci.yml`): линтеры и архитектура, юнит, интеграция, генератор (генерирует код и прогоняет
+  все проверки на нём), сборка образа.
 
-[tool.ruff.lint.pylint]
-max-args = 7   # >7 аргументов → группировать в конфиг-объект или *-only параметры
-```
-`ruff check src/` · `ruff format src/`
-
-### Pyright (`pyproject.toml`)
-```toml
-[tool.pyright]
-pythonVersion = "3.12"
-typeCheckingMode = "standard"
-include = ["src"]
-```
-`pyright src/` обязателен перед коммитом. Ошибки — блокер. `# type: ignore` — только с комментарием-причиной.
-
-### pre-commit
-`pre-commit install` (один раз) · `pre-commit run --all-files` (ручной прогон).
-
-### Локальный запуск
-```bash
-docker compose up db redis rabbitmq -d
-granian --interface asgi --factory --loop uvloop --reload --host 0.0.0.0 src.main:create_app
-pytest                  # без интеграционных
-pytest -m integration   # с Docker
-```
-
-**`main.py` — только factory.** Granian вызывает `create_app()` с `--factory`. Голый `app = FastAPI()` на модульном уровне запрещён (ломает `--factory` и тесты).
-
-```python
-def create_app() -> FastAPI:
-    config = Config()
-    app = FastAPI(...)
-    app.state.container = Container(config)
-    return app
-```
+**`main.py` — только factory.** Голый `app = FastAPI()` на модульном уровне запрещён (ломает `--factory` и тесты).

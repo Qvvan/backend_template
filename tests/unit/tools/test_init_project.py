@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.init_project import REMOVE, InitError, init_project, process_regions
+from tools.init_project import _SKIP_DIRS, REMOVE, InitError, init_project, process_regions
 
 ROOT = Path(__file__).resolve().parents[3]
 FLAGS = {"redis": True, "rabbitmq": False, "kafka": True, "minio": False, "messaging": True, "template": False}
@@ -37,7 +37,13 @@ def test_markdown_markers() -> None:
 
 @pytest.mark.parametrize(
     "text",
-    ["# [if redis]\na\n", "a\n# [endif]\n", "# [if postgres]\na\n# [endif]\n", "# [if __import__]\n# [endif]\n"],
+    [
+        "# [if redis]\na\n",
+        "a\n# [endif]\n",
+        "# [if postgres]\na\n# [endif]\n",
+        "# [if __import__]\n# [endif]\n",
+        "text <!-- [if redis] -->inline<!-- [endif] -->\n",
+    ],
 )
 def test_malformed_regions_are_rejected(text: str) -> None:
     with pytest.raises(InitError):
@@ -48,12 +54,13 @@ def test_every_template_file_has_balanced_regions() -> None:
     """Catches a forgotten [endif] in the template before a project is generated from it."""
     all_on = dict.fromkeys(FLAGS, True)
     for path in ROOT.rglob("*"):
-        if path.is_file() and not {".git", ".venv"} & set(path.relative_to(ROOT).parts):
+        if path.is_file() and not _SKIP_DIRS & set(path.relative_to(ROOT).parts):
             try:
                 text = path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
                 continue
-            if "[if" in text and path.name != "test_init_project.py":
+            # these two describe the syntax and are deleted before processing
+            if "[if" in text and path.name not in {"test_init_project.py", "init_project.py"}:
                 process_regions(text, all_on, str(path))
 
 

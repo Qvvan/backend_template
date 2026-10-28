@@ -255,3 +255,6 @@ celerybeat.pid
 # Kubernetes
 *.kubeconfig
 /models/
+
+# Claude Code: personal settings stay local
+.claude/settings.local.json
