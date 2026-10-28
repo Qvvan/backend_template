@@ -29,6 +29,7 @@ dependencies = [
 dev = [
     "granian[reload, uvloop]>=2.6.1",
     "httpx>=0.28.1",
+    "import-linter>=2.15",
     "pika>=1.4.1",
     "pre-commit>=4.6.0",
     "psycopg2-binary>=2.9.12",
@@ -50,9 +51,11 @@ migrations = [
 ]
 
 [tool.pyright]
-  pythonVersion = "3.12"
-  typeCheckingMode = "standard"
-  include = ["src"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+include = ["src", "tests", "tools"]
+# CLAUDE.md: no bare list / dict / tuple without type parameters
+reportMissingTypeArgument = "error"
 
 [tool.ruff]
 line-length = 120
@@ -82,6 +85,9 @@ select = [
     "RET",  # flake8-return (улучшает читаемость return)
     "RUF",  # Ruff-specific rules
     "PL",   # Pylint (базовые проверки качества)
+    "G",    # flake8-logging-format: no f-strings / % / .format in log messages
+    "T20",  # flake8-print: no print()
+    "ANN201", "ANN202", "ANN204", "ANN205", "ANN206",  # return type on every function and method
 ]
 
 ignore = [
@@ -100,7 +106,9 @@ ignore = [
 max-args = 7
 
 [tool.ruff.lint.isort]
-known-first-party = ["src"]
+known-first-party = ["src", "tests", "tools"]
+# CLAUDE.md: every module starts with it (I002, fixed automatically)
+required-imports = ["from __future__ import annotations"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -108,4 +116,81 @@ testpaths = ["tests"]
 addopts = "-m 'not integration'"
 markers = [
     "integration: marks tests as integration tests (require running infrastructure)",
+]
+filterwarnings = [
+    # third-party: testcontainers' own deprecated decorators, not our code
+    "ignore:The @wait_container_is_ready decorator is deprecated:DeprecationWarning",
+]
+
+# ── Architecture: layer boundaries (make lint-arch) ──────────────────────────
+[tool.importlinter]
+root_packages = ["src"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Domain is pure Python: no other layer, no framework or driver"
+type = "forbidden"
+source_modules = ["src.domain"]
+forbidden_modules = [
+    "src.api", "src.core", "src.entrypoints", "src.infrastructure", "src.interfaces", "src.main",
+    "src.services", "src.workers",
+    "fastapi", "starlette", "pydantic", "asyncpg", "redis", "aio_pika", "aiokafka", "minio",
+]
+
+[[tool.importlinter.contracts]]
+name = "Interfaces know nothing about implementations, drivers or Config"
+type = "forbidden"
+source_modules = ["src.interfaces"]
+forbidden_modules = [
+    "src.api", "src.core.config", "src.core.container", "src.entrypoints", "src.infrastructure", "src.main",
+    "src.services", "src.workers",
+    "asyncpg", "redis", "aio_pika", "aiokafka", "minio",
+]
+
+[[tool.importlinter.contracts]]
+name = "Services depend only on interfaces, domain and core — never on implementations or Config"
+type = "forbidden"
+source_modules = ["src.services"]
+forbidden_modules = [
+    "src.api", "src.core.config", "src.core.container", "src.entrypoints", "src.infrastructure", "src.main",
+    "src.workers",
+    "asyncpg", "redis", "aio_pika", "aiokafka", "minio",
+]
+
+[[tool.importlinter.contracts]]
+name = "Workers call services through interfaces: no DB/cache/broker access, no Config"
+type = "forbidden"
+source_modules = ["src.workers"]
+forbidden_modules = [
+    "src.api", "src.core.config", "src.core.container", "src.entrypoints", "src.infrastructure", "src.main",
+    "src.services",
+    "asyncpg", "redis", "aio_pika", "aiokafka", "minio",
+]
+
+[[tool.importlinter.contracts]]
+name = "Infrastructure (incl. message handlers) never imports upper layers or Config"
+type = "forbidden"
+source_modules = ["src.infrastructure"]
+forbidden_modules = [
+    "src.api", "src.core.config", "src.core.container", "src.entrypoints", "src.main", "src.services", "src.workers",
+]
+
+[[tool.importlinter.contracts]]
+name = "API layer does not import implementations or drivers directly (only through the container)"
+type = "forbidden"
+source_modules = ["src.api"]
+forbidden_modules = [
+    "src.core.config", "src.entrypoints", "src.infrastructure", "src.main", "src.services", "src.workers",
+    "asyncpg", "redis", "aio_pika", "aiokafka", "minio",
+]
+# api.dependencies reads the Container, which imports everything — only direct imports are checked
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Core building blocks (exceptions, logger, events, config) do not depend on application layers"
+type = "forbidden"
+source_modules = ["src.core.config", "src.core.events", "src.core.exceptions", "src.core.logger"]
+forbidden_modules = [
+    "src.api", "src.core.container", "src.entrypoints", "src.infrastructure", "src.main", "src.services",
+    "src.workers",
 ]
