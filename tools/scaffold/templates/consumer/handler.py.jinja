@@ -1,0 +1,20 @@
+from __future__ import annotations
+
+from src.core.logger import AppLogger
+from src.domain.entities.{{ n.snake }} import {{ n.pascal }}Entity
+from src.infrastructure.messaging.{{ broker }}.handlers.schemas.{{ n.snake }}_schemas import {{ n.pascal }}Message
+from src.interfaces.services.{{ n.snake }}_service import I{{ n.pascal }}Service
+
+
+class {{ n.pascal }}Handler:
+    __slots__ = ("_logger", "_service")
+
+    def __init__(self, service: I{{ n.pascal }}Service, logger: AppLogger) -> None:
+        self._service = service
+        self._logger = logger
+
+    async def handle(self, msg: {{ n.pascal }}Message) -> None:
+        event = {{ n.pascal }}Entity(message_id=msg.event_id, {% for f in fields %}{{ f.name }}=msg.{{ f.name }}{% if not loop.last %}, {% endif %}{% endfor %})
+        self._logger.info("Handling {{ routing_key }}", message_id=msg.event_id)
+        await self._service.handle(event)
+        self._logger.info("{{ routing_key }} handled", message_id=msg.event_id)

@@ -125,15 +125,6 @@ async def test_keys_by_pattern(redis_repo: RedisRepository) -> None:
     keys = [f"{_KEY}scan_{i}" for i in range(3)]
     for k in keys:
         await redis_repo.set(k, "v")
-    found = await redis_repo.keys(f"{_KEY}scan_*")
+    found = await redis_repo.scan_keys(f"{_KEY}scan_*")
     assert set(found) == set(keys)
     await redis_repo.delete_many(keys)
-
-
-async def test_flush_db_clears_all_keys(redis_repo: RedisRepository) -> None:
-    keys = [f"{_KEY}flush_{i}" for i in range(3)]
-    for k in keys:
-        await redis_repo.set(k, "v")
-    assert await redis_repo.flush_db() is True
-    for k in keys:
-        assert await redis_repo.exists(k) is False

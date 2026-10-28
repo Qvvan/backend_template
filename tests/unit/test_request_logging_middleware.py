@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import logging
 import uuid
-from collections.abc import Awaitable, Callable
-from unittest.mock import MagicMock
+from collections.abc import Iterator
 
 import pytest
-from starlette.requests import Request
-from starlette.responses import Response
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
 
 from src.api.middleware.request_logging import RequestLoggingMiddleware
 from src.core.logger import AppLogger, request_context
@@ -18,87 +18,116 @@ def app_logger() -> AppLogger:
 
 
 @pytest.fixture
-def middleware(app_logger: AppLogger) -> RequestLoggingMiddleware:
-    return RequestLoggingMiddleware(app=MagicMock(), logger=app_logger)
+def app(app_logger: AppLogger) -> FastAPI:
+    application = FastAPI()
+    application.add_middleware(RequestLoggingMiddleware, logger=app_logger, quiet_paths=frozenset({"/quiet"}))
+
+    @application.get("/ok")
+    async def ok(request: Request) -> dict[str, str | None]:
+        return {"state": request.state.request_id, "context": AppLogger.get_request_id()}
+
+    @application.get("/created", status_code=201)
+    async def created() -> dict[str, str]:
+        return {}
+
+    @application.get("/quiet")
+    async def quiet() -> dict[str, str]:
+        return {}
+
+    @application.get("/boom")
+    async def boom() -> None:
+        raise RuntimeError("simulated error")
+
+    return application
 
 
-def _make_request(method: str = "GET", path: str = "/test") -> Request:
-    scope = {
-        "type": "http",
-        "method": method,
-        "scheme": "http",
-        "server": ("testserver", 80),
-        "root_path": "",
-        "path": path,
-        "query_string": b"",
-        "headers": [],
-    }
-    return Request(scope)
+@pytest.fixture
+def client(app: FastAPI) -> TestClient:
+    return TestClient(app)
 
 
-def _ok_call_next(status_code: int = 200) -> Callable[[Request], Awaitable[Response]]:
-    async def _call_next(_request: Request) -> Response:
-        return Response(content=b"ok", status_code=status_code)
+class _ListHandler(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.messages: list[str] = []
 
-    return _call_next
-
-
-# ── happy path ────────────────────────────────────────────────────────────────
-
-
-async def test_response_contains_x_request_id_header(middleware: RequestLoggingMiddleware) -> None:
-    response = await middleware.dispatch(_make_request(), _ok_call_next())
-    assert "x-request-id" in response.headers
+    def emit(self, record: logging.LogRecord) -> None:
+        self.messages.append(record.getMessage())
 
 
-async def test_x_request_id_is_valid_uuid(middleware: RequestLoggingMiddleware) -> None:
-    response = await middleware.dispatch(_make_request(), _ok_call_next())
-    # raises ValueError if not a valid UUID
+@pytest.fixture
+def logged() -> Iterator[list[str]]:
+    """Messages written through AppLogger during the test (the 'app' logger does not propagate)."""
+    handler = _ListHandler()
+    logger = logging.getLogger("app")
+    logger.addHandler(handler)
+    yield handler.messages
+    logger.removeHandler(handler)
+
+
+# ── request id ────────────────────────────────────────────────────────────────
+
+
+def test_response_contains_generated_uuid_request_id(client: TestClient) -> None:
+    response = client.get("/ok")
+    uuid.UUID(response.headers["x-request-id"])  # raises ValueError if not a valid UUID
+
+
+def test_incoming_request_id_is_reused(client: TestClient) -> None:
+    response = client.get("/ok", headers={"X-Request-ID": "gateway-123"})
+    assert response.headers["x-request-id"] == "gateway-123"
+
+
+def test_unsafe_incoming_request_id_is_replaced(client: TestClient) -> None:
+    response = client.get("/ok", headers={"X-Request-ID": "bad id\nwith newline"})
     uuid.UUID(response.headers["x-request-id"])
 
 
-async def test_request_state_receives_request_id(middleware: RequestLoggingMiddleware) -> None:
-    request = _make_request()
-    await middleware.dispatch(request, _ok_call_next())
-    # state is set during dispatch; value is a valid UUID string
-    uuid.UUID(request.state.request_id)
+def test_too_long_incoming_request_id_is_replaced(client: TestClient) -> None:
+    response = client.get("/ok", headers={"X-Request-ID": "a" * 129})
+    uuid.UUID(response.headers["x-request-id"])
 
 
-async def test_request_id_cleared_from_context_after_success(
-    middleware: RequestLoggingMiddleware,
-) -> None:
-    AppLogger.set_request_id("pre-existing")
-    await middleware.dispatch(_make_request(), _ok_call_next())
+def test_request_id_available_in_state_and_logger_context(client: TestClient) -> None:
+    response = client.get("/ok", headers={"X-Request-ID": "req-1"})
+    assert response.json() == {"state": "req-1", "context": "req-1"}
+
+
+def test_each_request_gets_unique_request_id(client: TestClient) -> None:
+    first = client.get("/ok").headers["x-request-id"]
+    second = client.get("/ok").headers["x-request-id"]
+    assert first != second
+
+
+def test_request_id_context_is_reset_after_request(client: TestClient) -> None:
+    client.get("/ok")
     assert request_context.get() is None
 
 
-async def test_each_request_gets_unique_request_id(middleware: RequestLoggingMiddleware) -> None:
-    r1 = await middleware.dispatch(_make_request(), _ok_call_next())
-    r2 = await middleware.dispatch(_make_request(), _ok_call_next())
-    assert r1.headers["x-request-id"] != r2.headers["x-request-id"]
+def test_original_response_status_is_preserved(client: TestClient) -> None:
+    assert client.get("/created").status_code == 201
 
 
-async def test_original_response_status_is_preserved(middleware: RequestLoggingMiddleware) -> None:
-    response = await middleware.dispatch(_make_request(), _ok_call_next(status_code=201))
-    assert response.status_code == 201
+# ── logging ───────────────────────────────────────────────────────────────────
+
+
+def test_request_and_response_are_logged(client: TestClient, logged: list[str]) -> None:
+    client.get("/ok")
+    assert logged == ["Incoming request", "Outgoing response"]
+
+
+def test_quiet_paths_are_not_logged(client: TestClient, logged: list[str]) -> None:
+    response = client.get("/quiet")
+    assert response.status_code == 200
+    assert "x-request-id" in response.headers
+    assert logged == []
 
 
 # ── error path ────────────────────────────────────────────────────────────────
 
 
-async def test_exception_propagates_from_dispatch(middleware: RequestLoggingMiddleware) -> None:
-    async def _failing(_request: Request) -> Response:
-        raise RuntimeError("simulated error")
-
+def test_exception_propagates_and_is_logged(app: FastAPI, logged: list[str]) -> None:
     with pytest.raises(RuntimeError, match="simulated error"):
-        await middleware.dispatch(_make_request(), _failing)
-
-
-async def test_request_id_cleared_after_exception(middleware: RequestLoggingMiddleware) -> None:
-    async def _failing(_request: Request) -> Response:
-        raise RuntimeError("boom")
-
-    with pytest.raises(RuntimeError):
-        await middleware.dispatch(_make_request(), _failing)
-
+        TestClient(app).get("/boom")
+    assert "Request failed" in logged
     assert request_context.get() is None

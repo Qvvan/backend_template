@@ -112,9 +112,7 @@ async def test_set_many_without_expire_calls_mset(repo: RedisRepository, mock_cl
     mock_client.mset.assert_called_once_with({"k1": "v1", "k2": "v2"})
 
 
-async def test_set_many_empty_mapping_returns_true_without_io(
-    repo: RedisRepository, mock_client: MagicMock
-) -> None:
+async def test_set_many_empty_mapping_returns_true_without_io(repo: RedisRepository, mock_client: MagicMock) -> None:
     mock_client.mset = AsyncMock()
     assert await repo.set_many({}) is True
     mock_client.mset.assert_not_called()
@@ -159,9 +157,7 @@ async def test_delete_many_returns_deleted_count(repo: RedisRepository, mock_cli
     mock_client.delete.assert_called_once_with("k1", "k2")
 
 
-async def test_delete_many_empty_input_returns_zero_without_io(
-    repo: RedisRepository, mock_client: MagicMock
-) -> None:
+async def test_delete_many_empty_input_returns_zero_without_io(repo: RedisRepository, mock_client: MagicMock) -> None:
     mock_client.delete = AsyncMock()
     assert await repo.delete_many([]) == 0
     mock_client.delete.assert_not_called()
@@ -182,35 +178,24 @@ async def test_decrement_delegates_to_decrby(repo: RedisRepository, mock_client:
     mock_client.decrby.assert_called_once_with("counter", 3)
 
 
-# ── keys ──────────────────────────────────────────────────────────────────────
+# ── scan_keys ─────────────────────────────────────────────────────────────────
 
 
-async def test_keys_collects_scan_iter_results(repo: RedisRepository, mock_client: MagicMock) -> None:
+async def test_scan_keys_collects_scan_iter_results(repo: RedisRepository, mock_client: MagicMock) -> None:
     async def _scan(*args: Any, **kwargs: Any) -> Any:
         for k in ["key1", "key2", "key3"]:
             yield k
 
     mock_client.scan_iter = MagicMock(return_value=_scan())
-    result = await repo.keys("key*")
+    result = await repo.scan_keys("key*")
     assert result == ["key1", "key2", "key3"]
     mock_client.scan_iter.assert_called_once_with("key*")
 
 
-async def test_keys_default_pattern_is_wildcard(repo: RedisRepository, mock_client: MagicMock) -> None:
+async def test_scan_keys_default_pattern_is_wildcard(repo: RedisRepository, mock_client: MagicMock) -> None:
     async def _scan(*args: Any, **kwargs: Any) -> Any:
         yield "a"
 
     mock_client.scan_iter = MagicMock(return_value=_scan())
-    await repo.keys()
+    await repo.scan_keys()
     mock_client.scan_iter.assert_called_once_with("*")
-
-
-# ── flush_db ──────────────────────────────────────────────────────────────────
-
-
-async def test_flush_db_calls_flushdb_and_returns_true(
-    repo: RedisRepository, mock_client: MagicMock
-) -> None:
-    mock_client.flushdb = AsyncMock()
-    assert await repo.flush_db() is True
-    mock_client.flushdb.assert_called_once()

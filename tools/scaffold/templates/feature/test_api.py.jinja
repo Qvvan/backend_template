@@ -1,0 +1,69 @@
+from __future__ import annotations
+
+from collections.abc import Iterator
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from src.api.dependencies import get_{{ n.snake }}_service
+from src.services.{{ n.snake }}_service import {{ n.pascal }}Service
+from tests.fakes.{{ n.snake }}_repository import InMemory{{ n.pascal }}Repository
+{% if events %}
+from tests.fakes.uow import FakeUnitOfWork
+{% endif %}
+
+_URL = "/api/v1/{{ n.url }}"
+_PAYLOAD = { {%- for f in fields %}"{{ f.name }}": {{ f.type.json_sample }}{% if not loop.last %}, {% endif %}{% endfor -%} }
+
+
+@pytest.fixture
+def client(api_app: FastAPI) -> Iterator[TestClient]:
+    """Real API app; the service works on an in-memory repository."""
+{% if events %}
+    uow = FakeUnitOfWork()
+    service = {{ n.pascal }}Service(repo=uow.{{ n.plural }}, uow=uow)
+{% else %}
+    service = {{ n.pascal }}Service(repo=InMemory{{ n.pascal }}Repository())
+{% endif %}
+    api_app.dependency_overrides[get_{{ n.snake }}_service] = lambda: service
+    with TestClient(api_app, raise_server_exceptions=False) as test_client:
+        yield test_client
+    api_app.dependency_overrides.clear()
+
+
+def test_create_and_get(client: TestClient) -> None:
+    created = client.post(_URL + "/", json=_PAYLOAD)
+    assert created.status_code == 201
+    fetched = client.get(f"{_URL}/{created.json()['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json() == created.json()
+{% for f in fields if f.type.comparable_in_json %}
+    assert fetched.json()["{{ f.name }}"] == _PAYLOAD["{{ f.name }}"]
+{% endfor %}
+
+
+def test_list_is_paginated(client: TestClient) -> None:
+    for _ in range(3):
+        client.post(_URL + "/", json=_PAYLOAD)
+    body = client.get(_URL + "/", params={"limit": 2}).json()
+    assert len(body["items"]) == 2
+    assert body["total"] == 3
+
+
+def test_update_and_delete(client: TestClient) -> None:
+    item_id = client.post(_URL + "/", json=_PAYLOAD).json()["id"]
+    assert client.put(f"{_URL}/{item_id}", json=_PAYLOAD).status_code == 200
+    assert client.delete(f"{_URL}/{item_id}").status_code == 204
+    assert client.get(f"{_URL}/{item_id}").status_code == 404
+
+
+def test_missing_returns_unified_404(client: TestClient) -> None:
+    response = client.get(f"{_URL}/00000000-0000-0000-0000-000000000000")
+    assert response.status_code == 404
+    assert response.json()["code"] == "NOT_FOUND"
+
+
+def test_invalid_id_and_body_return_422(client: TestClient) -> None:
+    assert client.get(f"{_URL}/not-a-uuid").json()["code"] == "VALIDATION_ERROR"
+    assert client.post(_URL + "/", json={}).status_code == 422

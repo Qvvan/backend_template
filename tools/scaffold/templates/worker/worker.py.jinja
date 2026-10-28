@@ -1,0 +1,22 @@
+from __future__ import annotations
+
+from src.core.logger import AppLogger
+from src.interfaces.services.{{ n.snake }}_service import I{{ n.pascal }}Service
+from src.workers.periodic import PeriodicWorker
+
+
+class {{ n.pascal }}Worker(PeriodicWorker):
+    """Calls I{{ n.pascal }}Service.run() every `interval` seconds."""
+
+    __slots__ = ("_service",)
+
+    def __init__(self, service: I{{ n.pascal }}Service, logger: AppLogger, interval: float) -> None:
+        super().__init__(logger=logger, interval=interval)
+        self._service = service
+
+    @property
+    def name(self) -> str:
+        return "{{ n.snake }}"
+
+    async def tick(self) -> None:
+        await self._service.run()

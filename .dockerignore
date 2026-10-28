@@ -1,0 +1,21 @@
+# Only src/, migrations/, yoyo.ini and the lock files are needed in the image
+.git
+.github
+.claude
+.venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+tests
+tools
+docs
+*.md
+.env
+.env.*
+!.env.example
+docker-compose*.yml
+Makefile

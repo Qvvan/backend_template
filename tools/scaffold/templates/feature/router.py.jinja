@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+import uuid
+from typing import Any
+
+from fastapi import APIRouter, Depends, Query
+from starlette import status
+
+from src.api.dependencies import get_{{ n.snake }}_service
+from src.api.schemas import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, ErrorResponse
+from src.api.v1.schemas.{{ n.snake }}_schemas import (
+    Create{{ n.pascal }}Request,
+    {{ n.pascal }}ListResponse,
+    {{ n.pascal }}Response,
+    Update{{ n.pascal }}Request,
+)
+from src.domain.entities.{{ n.snake }} import {{ n.pascal }}Entity
+from src.interfaces.services.{{ n.snake }}_service import I{{ n.pascal }}Service
+
+router = APIRouter(prefix="/{{ n.url }}", tags=["{{ n.plural_title }}"])
+
+_NOT_FOUND: dict[int | str, dict[str, Any]] = {status.HTTP_404_NOT_FOUND: {"model": ErrorResponse}}
+
+
+@router.post("/", response_model={{ n.pascal }}Response, status_code=status.HTTP_201_CREATED)
+async def create_{{ n.snake }}(
+    body: Create{{ n.pascal }}Request,
+    service: I{{ n.pascal }}Service = Depends(get_{{ n.snake }}_service),
+) -> {{ n.pascal }}Response:
+    entity = {{ n.pascal }}Entity({% for f in fields %}{{ f.name }}=body.{{ f.name }}{% if not loop.last %}, {% endif %}{% endfor %})
+    result = await service.create(entity)
+    return {{ n.pascal }}Response.model_validate(result)
+
+
+@router.get("/", response_model={{ n.pascal }}ListResponse)
+async def list_{{ n.plural }}(
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+    service: I{{ n.pascal }}Service = Depends(get_{{ n.snake }}_service),
+) -> {{ n.pascal }}ListResponse:
+    page = await service.get_page(limit=limit, offset=offset)
+    return {{ n.pascal }}ListResponse(
+        items=[{{ n.pascal }}Response.model_validate(item) for item in page.items],
+        total=page.total,
+        limit=page.limit,
+        offset=page.offset,
+    )
+
+
+@router.get("/{{ '{' }}{{ n.snake }}_id{{ '}' }}", response_model={{ n.pascal }}Response, responses=_NOT_FOUND)
+async def get_{{ n.snake }}(
+    {{ n.snake }}_id: uuid.UUID,
+    service: I{{ n.pascal }}Service = Depends(get_{{ n.snake }}_service),
+) -> {{ n.pascal }}Response:
+    result = await service.get_by_id(str({{ n.snake }}_id))
+    return {{ n.pascal }}Response.model_validate(result)
+
+
+@router.put("/{{ '{' }}{{ n.snake }}_id{{ '}' }}", response_model={{ n.pascal }}Response, responses=_NOT_FOUND)
+async def update_{{ n.snake }}(
+    {{ n.snake }}_id: uuid.UUID,
+    body: Update{{ n.pascal }}Request,
+    service: I{{ n.pascal }}Service = Depends(get_{{ n.snake }}_service),
+) -> {{ n.pascal }}Response:
+    changes = {{ n.pascal }}Entity({% for f in fields %}{{ f.name }}=body.{{ f.name }}{% if not loop.last %}, {% endif %}{% endfor %})
+    result = await service.update(str({{ n.snake }}_id), changes)
+    return {{ n.pascal }}Response.model_validate(result)
+
+
+@router.delete("/{{ '{' }}{{ n.snake }}_id{{ '}' }}", status_code=status.HTTP_204_NO_CONTENT, responses=_NOT_FOUND)
+async def delete_{{ n.snake }}(
+    {{ n.snake }}_id: uuid.UUID,
+    service: I{{ n.pascal }}Service = Depends(get_{{ n.snake }}_service),
+) -> None:
+    await service.delete(str({{ n.snake }}_id))

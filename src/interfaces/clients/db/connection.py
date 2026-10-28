@@ -7,6 +7,7 @@ from typing import Any
 
 class IDBBase(ABC):
     """Базовый интерфейс — обязателен для всех БД."""
+
     @abstractmethod
     async def close(self) -> None: ...
 

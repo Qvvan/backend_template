@@ -66,7 +66,7 @@ async def test_transaction_rollback_on_exception(pg_pool: PostgresConnectionPool
 
 async def test_uow_begin_yields_transaction_session(pg_uow: PostgresUnitOfWork) -> None:
     async with pg_uow.begin() as session:
-        row = await session._tx.fetchrow("SELECT 42 AS answer")
+        row = await session.executor.fetchrow("SELECT 42 AS answer")
     assert row is not None
     assert row["answer"] == 42
 
@@ -137,7 +137,7 @@ async def test_uow_commit_persists_row(
     await pg_executor.execute(f"CREATE TABLE {table} (val TEXT NOT NULL)")
     try:
         async with pg_uow.begin() as session:
-            await session._tx.execute(f"INSERT INTO {table} VALUES ('committed')")
+            await session.executor.execute(f"INSERT INTO {table} VALUES ('committed')")
 
         row = await pg_executor.fetchrow(f"SELECT val FROM {table}")
         assert row is not None
@@ -156,7 +156,7 @@ async def test_uow_rollback_on_exception_reverts_row(
     try:
         with pytest.raises(RuntimeError, match="forced"):
             async with pg_uow.begin() as session:
-                await session._tx.execute(f"INSERT INTO {table} VALUES ('ghost')")
+                await session.executor.execute(f"INSERT INTO {table} VALUES ('ghost')")
                 raise RuntimeError("forced")
 
         row = await pg_executor.fetchrow(f"SELECT val FROM {table}")

@@ -1,0 +1,31 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+
+from src.domain.entities.page import PageEntity
+from src.domain.entities.{{ n.snake }} import {{ n.pascal }}Entity
+
+
+class I{{ n.pascal }}Service(ABC):
+    @abstractmethod
+    async def create(self, entity: {{ n.pascal }}Entity) -> {{ n.pascal }}Entity:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_by_id(self, {{ n.snake }}_id: str) -> {{ n.pascal }}Entity:
+        """Raises NotFoundError."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_page(self, *, limit: int, offset: int) -> PageEntity[{{ n.pascal }}Entity]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update(self, {{ n.snake }}_id: str, changes: {{ n.pascal }}Entity) -> {{ n.pascal }}Entity:
+        """Raises NotFoundError."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete(self, {{ n.snake }}_id: str) -> None:
+        """Raises NotFoundError."""
+        raise NotImplementedError

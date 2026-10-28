@@ -8,6 +8,7 @@ from src.interfaces.clients.db.connection import IDBTransactional
 from src.interfaces.clients.storage.client import IStorageClient
 from src.interfaces.messaging.kafka.client import IKafkaClient
 from src.interfaces.messaging.rabbitmq.client import IAMQPClient
+from src.interfaces.services.health_service import IHealthService
 from src.interfaces.workers.scheduler import IScheduler
 
 
@@ -19,21 +20,44 @@ def get_postgres_db(request: Request) -> IDBTransactional:
     return request.app.state.container.infra.postgres_db
 
 
+# [if rabbitmq]
 def get_rabbitmq(request: Request) -> IAMQPClient:
     return request.app.state.container.infra.rabbitmq
 
 
+# [endif]
+
+
+# [if kafka]
 def get_kafka(request: Request) -> IKafkaClient:
     return request.app.state.container.infra.kafka
 
 
+# [endif]
+
+
+# [if redis]
 def get_redis(request: Request) -> ICacheDB:
     return request.app.state.container.infra.redis_db
 
 
+# [endif]
+
+
+# [if minio]
 def get_minio(request: Request) -> IStorageClient:
     return request.app.state.container.infra.minio_client
 
 
+# [endif]
+
+
 def get_scheduler(request: Request) -> IScheduler:
     return request.app.state.container.workers.scheduler
+
+
+def get_health_service(request: Request) -> IHealthService:
+    return request.app.state.container.services.health
+
+
+# scaffold:dependencies

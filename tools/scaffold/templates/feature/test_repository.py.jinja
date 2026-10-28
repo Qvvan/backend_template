@@ -1,0 +1,38 @@
+from __future__ import annotations
+
+from datetime import UTC, date, datetime
+
+from src.domain.entities.{{ n.snake }} import {{ n.pascal }}Entity
+from src.infrastructure.repository.postgresql.client.transaction_executor import PostgresTransactionExecutor
+from src.infrastructure.repository.postgresql.{{ n.snake }}_repository import Postgres{{ n.pascal }}Repository
+
+
+def _entity() -> {{ n.pascal }}Entity:
+    return {{ n.pascal }}Entity({% for f in fields %}{{ f.name }}={{ f.type.sample }}{% if not loop.last %}, {% endif %}{% endfor %})
+
+
+async def test_save_and_find_by_id(db_executor: PostgresTransactionExecutor) -> None:
+    repo = Postgres{{ n.pascal }}Repository(db_executor)
+    saved = await repo.save(_entity())
+    assert await repo.find_by_id(saved.id) == saved
+
+
+async def test_find_many_newest_first_and_count(db_executor: PostgresTransactionExecutor) -> None:
+    repo = Postgres{{ n.pascal }}Repository(db_executor)
+    first = await repo.save(_entity())
+    second = await repo.save(_entity())
+    assert [e.id for e in await repo.find_many(limit=10, offset=0)] == [second.id, first.id]
+    assert await repo.count() == 2
+
+
+async def test_update_and_delete(db_executor: PostgresTransactionExecutor) -> None:
+    repo = Postgres{{ n.pascal }}Repository(db_executor)
+    saved = await repo.save(_entity())
+{% set f = fields[0] %}
+    saved.{{ f.name }} = {{ f.type.sample_alt }}
+    updated = await repo.update(saved)
+    assert updated is not None
+    assert updated.{{ f.name }} {{ f.type.compare }} {{ f.type.sample_alt }}
+    assert await repo.delete(saved.id) is True
+    assert await repo.delete(saved.id) is False
+    assert await repo.find_by_id(saved.id) is None

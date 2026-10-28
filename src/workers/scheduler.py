@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
 
 from src.core.logger import AppLogger
 from src.interfaces.workers.scheduler import IScheduler, WorkerInfo
@@ -15,11 +16,11 @@ class AsyncScheduler(IScheduler):
     def __init__(
         self,
         logger: AppLogger,
-        workers: list[IWorker],
+        workers: Sequence[IWorker],
         auto_start: frozenset[str] | None = None,
     ) -> None:
         self._logger = logger
-        self._workers = workers
+        self._workers = list(workers)
         self._auto_start = auto_start  # None = все воркеры; frozenset = только перечисленные
         self._stop_events: dict[str, asyncio.Event] = {w.name: asyncio.Event() for w in workers}
         self._tasks: dict[str, asyncio.Task[None]] = {}

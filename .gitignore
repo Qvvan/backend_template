@@ -234,7 +234,6 @@ dmypy.json
 cython_debug/
 
 # Docker
-.dockerignore
 docker-compose.override.yml
 .docker/
 
@@ -256,3 +255,6 @@ celerybeat.pid
 # Kubernetes
 *.kubeconfig
 /models/
+
+# Claude Code: personal settings stay local
+.claude/settings.local.json

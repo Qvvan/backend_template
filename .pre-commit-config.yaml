@@ -1,12 +1,42 @@
+# Tool versions come from uv.lock (local hooks run `uv run ...`), so pre-commit, `make check` and CI agree.
+# Install once: make pre-commit-install
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.13
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
     hooks:
-      - id: ruff
-        args: [--fix]
-      - id: ruff-format
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: detect-private-key
 
-  - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.400
+  - repo: local
     hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix --force-exclude
+        language: unsupported
+        types: [python]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --force-exclude
+        language: unsupported
+        types: [python]
       - id: pyright
+        name: pyright
+        entry: uv run pyright
+        language: unsupported
+        types: [python]
+        pass_filenames: false
+      - id: lint-imports
+        name: layer boundaries (import-linter)
+        entry: uv run lint-imports
+        language: unsupported
+        types: [python]
+        pass_filenames: false
+      - id: check-architecture
+        name: architecture rules (tools/check_architecture.py)
+        entry: uv run python -m tools.check_architecture
+        language: unsupported
+        types: [python]
+        pass_filenames: false

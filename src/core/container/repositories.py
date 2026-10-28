@@ -13,6 +13,11 @@ class RepositoryContainer:
     def __init__(self, infra: InfrastructureContainer) -> None:
         self._infra = infra
 
+    # [if redis]
     @cached_property
     def redis(self) -> ICacheRepository:
         return RedisRepository(client=self._infra.redis_db.client)
+
+    # [endif]
+
+    # scaffold:repositories

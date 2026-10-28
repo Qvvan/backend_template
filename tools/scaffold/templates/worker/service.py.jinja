@@ -1,0 +1,15 @@
+from __future__ import annotations
+
+from src.core.logger import AppLogger
+from src.interfaces.services.{{ n.snake }}_service import I{{ n.pascal }}Service
+
+
+class {{ n.pascal }}Service(I{{ n.pascal }}Service):
+    __slots__ = ("_logger",)
+
+    def __init__(self, logger: AppLogger) -> None:
+        self._logger = logger
+
+    async def run(self) -> None:
+        # TODO: the job itself — call repositories/clients through interfaces injected in __init__
+        self._logger.debug("{{ n.title }} run finished")

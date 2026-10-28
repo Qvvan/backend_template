@@ -8,7 +8,7 @@ from src.api.v1.schemas.worker_schemas import WorkerResponse, WorkersListRespons
 from src.core.exceptions import NotFoundError
 from src.interfaces.workers.scheduler import IScheduler
 
-router = APIRouter(prefix="/workers", tags=["Workers"])
+router = APIRouter(prefix="/api/v1/workers", tags=["Workers"])
 
 
 @router.get(

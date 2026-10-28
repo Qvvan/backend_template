@@ -1,0 +1,20 @@
+from __future__ import annotations
+
+from unittest.mock import AsyncMock
+
+from src.core.logger import AppLogger
+from src.interfaces.services.{{ n.snake }}_service import I{{ n.pascal }}Service
+from src.services.{{ n.snake }}_service import {{ n.pascal }}Service
+from src.workers.{{ n.snake }}_worker import {{ n.pascal }}Worker
+
+
+async def test_tick_calls_service_once() -> None:
+    service = AsyncMock(spec=I{{ n.pascal }}Service)
+    worker = {{ n.pascal }}Worker(service=service, logger=AppLogger(level="DEBUG"), interval=1)
+    await worker.tick()
+    service.run.assert_awaited_once()
+    assert worker.name == "{{ n.snake }}"
+
+
+async def test_service_run_completes() -> None:
+    await {{ n.pascal }}Service(logger=AppLogger(level="DEBUG")).run()

@@ -1,28 +1,27 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any
-
-from src.core.logger import AppLogger
+from src.core.events import IntegrationEvent
+from src.domain.entities.messaging import OutgoingMessage
 from src.interfaces.messaging.kafka.client import IKafkaClient
-from src.interfaces.messaging.kafka.publisher import IKafkaPublisher
+from src.interfaces.messaging.publisher import IMessagePublisher
 
 
-class KafkaMessagePublisher(IKafkaPublisher):
-    """Общий publisher для всех Kafka-событий"""
+class KafkaMessagePublisher(IMessagePublisher):
+    """Publishes integration events to Kafka: destination = topic, routing_key goes to `x-event-type`."""
 
-    __slots__ = ("_kafka", "_logger")
+    __slots__ = ("_kafka",)
 
-    def __init__(self, kafka: IKafkaClient, logger: AppLogger) -> None:
+    def __init__(self, kafka: IKafkaClient) -> None:
         self._kafka = kafka
-        self._logger = logger
 
-    async def publish(
-        self,
-        topic: str,
-        payload: dict[str, Any],
-        key: str | None = None,
-        headers: Mapping[str, bytes] | None = None,
-    ) -> None:
-        """Публикует событие"""
-        await self._kafka.publish(topic=topic, payload=payload, key=key, headers=headers)
+    async def publish(self, event: IntegrationEvent) -> None:
+        await self.publish_message(event.to_message())
+
+    async def publish_message(self, message: OutgoingMessage) -> None:
+        await self._kafka.publish(
+            topic=message.destination,
+            payload=message.payload,
+            key=message.key,
+            headers=message.headers,
+            message_id=message.message_id,
+        )

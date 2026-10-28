@@ -4,61 +4,31 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from prometheus_fastapi_instrumentator import Instrumentator
-from starlette.middleware.cors import CORSMiddleware
 
 from src.api import router
-from src.api.exception_handlers import register_errors
-from src.api.middleware.request_logging import RequestLoggingMiddleware
 from src.core.config import Config
 from src.core.container import Container
+from src.core.telemetry import shutdown_tracing
+from src.entrypoints.app_builder import build_app
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Управление жизненным циклом приложения."""
+def create_app(config: Config | None = None, container: Container | None = None) -> FastAPI:
+    """HTTP API process. Background workers and consumers run in their own processes (src/entrypoints/)."""
+    cfg = config or Config()
+    app_container = container or Container(cfg)
 
-    container = app.state.container  # type: ignore
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+        yield
+        await app_container.closer()
+        shutdown_tracing()
 
-    container.workers.start()
-
-    yield
-
-    await container.closer()
-
-
-def create_app() -> FastAPI:
-    """Фабрика для создания приложения"""
-    cfg = Config()
-    container = Container(cfg)
-
-    app = FastAPI(
+    return build_app(
         title="API",
-        description="API",
-        version="1.0.0",
+        container=app_container,
+        debug=cfg.app.DEBUG,
+        telemetry=cfg.telemetry,
         lifespan=lifespan,
-        docs_url="/docs" if cfg.app.DEBUG else None,
-        redoc_url="/redoc" if cfg.app.DEBUG else None,
-        openapi_url="/openapi.json" if cfg.app.DEBUG else None,
+        routers=[router],
+        cors_origins=cfg.app.CORS_ORIGINS,
     )
-
-    app.add_middleware(
-        CORSMiddleware,  # type: ignore
-        allow_origins=cfg.app.CORS_ORIGINS,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    app.add_middleware(
-        RequestLoggingMiddleware,  # type: ignore
-        logger=container.logger,
-    )
-
-    app.include_router(router, prefix="/api")
-    register_errors(app)
-
-    Instrumentator().instrument(app).expose(app)
-
-    app.state.container = container  # type: ignore
-
-    return app

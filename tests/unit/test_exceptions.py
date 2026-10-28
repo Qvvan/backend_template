@@ -28,7 +28,7 @@ def test_database_error() -> None:
 def test_validation_error() -> None:
     err = ValidationError("invalid input")
     assert err.code == "VALIDATION_ERROR"
-    assert err.http_status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert err.http_status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 def test_not_found_error_message_format() -> None:
