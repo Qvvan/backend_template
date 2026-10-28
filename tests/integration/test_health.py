@@ -11,7 +11,7 @@ from src.api.exception_handlers import register_errors
 from src.api.health import router
 from src.interfaces.clients.cache_client.client import ICacheDB
 from src.interfaces.clients.db.connection import IDBTransactional
-from src.interfaces.messaging.client import IAMQPClient
+from src.interfaces.messaging.rabbitmq.client import IAMQPClient
 
 
 @pytest.fixture

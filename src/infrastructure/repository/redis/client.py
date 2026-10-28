@@ -39,7 +39,7 @@ class RedisDB(ICacheDB):
 
     async def close(self) -> None:
         """Закрыть подключение."""
-        await self._client.close()
+        await self._client.aclose()
 
     async def health_check(self) -> bool:
         try:

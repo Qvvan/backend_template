@@ -8,8 +8,8 @@ import pytest
 from pydantic import BaseModel
 
 from src.core.logger import AppLogger
-from src.infrastructure.messaging.rabbitmq import RabbitMQClient
-from src.interfaces.messaging.client import AMQPExchangeType
+from src.infrastructure.messaging.rabbitmq.client import RabbitMQClient
+from src.interfaces.messaging.rabbitmq.client import AMQPExchangeType
 
 
 class _Msg(BaseModel):

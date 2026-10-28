@@ -8,10 +8,10 @@ from src.infrastructure.messaging.kafka.client import KafkaClient
 from src.infrastructure.messaging.rabbitmq.client import RabbitMQClient
 from src.infrastructure.repository.postgresql.client.connection import PostgresConnectionPool
 from src.infrastructure.repository.postgresql.client.query_executor import PostgresQueryExecutor
-from src.interfaces.clients.db.query_executor import IQueryExecutor
 from src.infrastructure.repository.redis.client import RedisDB
 from src.infrastructure.storage.minio.client import MinIOClient
 from src.infrastructure.uow.postgres_uow import PostgresUnitOfWork
+from src.interfaces.clients.db.query_executor import IQueryExecutor
 
 
 class InfrastructureContainer:

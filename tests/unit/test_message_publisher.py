@@ -3,8 +3,8 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 from src.core.logger import AppLogger
-from src.infrastructure.messaging.publisher import MessagePublisher
-from src.interfaces.messaging.client import IAMQPClient
+from src.infrastructure.messaging.rabbitmq.publisher import MessagePublisher
+from src.interfaces.messaging.rabbitmq.client import IAMQPClient
 
 
 async def test_publish_delegates_to_rabbit_with_correct_args() -> None:

@@ -7,7 +7,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ConfigBase(BaseSettings):
-    model_config = SettingsConfigDict(env_file_encoding="utf-8", extra="ignore")
+    # Real environment variables take precedence over values from .env.
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
 class PostgresConfig(ConfigBase):
@@ -99,7 +100,7 @@ class MinIOConfig(ConfigBase):
 class Config(ConfigBase):
     """Главный класс конфигурации"""
 
-    model_config = SettingsConfigDict(env_file_encoding="utf-8", extra="ignore", frozen=True)
+    model_config = SettingsConfigDict(frozen=True)
 
     app: AppConfig = Field(default_factory=AppConfig)  # type: ignore[arg-type]
     logging: LoggingConfig = Field(default_factory=LoggingConfig)  # type: ignore[arg-type]

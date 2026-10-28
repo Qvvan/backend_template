@@ -8,7 +8,7 @@ from testcontainers.rabbitmq import RabbitMqContainer
 from testcontainers.redis import RedisContainer
 
 from src.core.logger import AppLogger
-from src.infrastructure.messaging.rabbitmq import RabbitMQClient
+from src.infrastructure.messaging.rabbitmq.client import RabbitMQClient
 from src.infrastructure.repository.postgresql.client.connection import PostgresConnectionPool
 from src.infrastructure.repository.postgresql.client.query_executor import PostgresQueryExecutor
 from src.infrastructure.repository.redis.client import RedisDB
@@ -56,7 +56,6 @@ async def pg_pool(pg_container: PostgresContainer, logger: AppLogger) -> AsyncGe
         password=pg_container.password,
         pool_size=2,
     )
-    await pool.connect()
     yield pool
     await pool.close()
 

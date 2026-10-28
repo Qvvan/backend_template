@@ -26,18 +26,18 @@ class PostgresConnectionPool(IDBTransactional):
     )
 
     def __init__(
-            self,
-            *,
-            logger: AppLogger,
-            user: str,
-            password: str,
-            host: str,
-            port: int,
-            database: str,
-            echo: bool = False,
-            pool_size: int = 5,
-            command_timeout: int = 10,
-            statement_cache_size: int = 256,
+        self,
+        *,
+        logger: AppLogger,
+        user: str,
+        password: str,
+        host: str,
+        port: int,
+        database: str,
+        echo: bool = False,
+        pool_size: int = 5,
+        command_timeout: int = 10,
+        statement_cache_size: int = 256,
     ) -> None:
         self._dsn = f"postgresql://{user}:{quote_plus(password)}@{host}:{port}/{database}"
         self._echo = echo
@@ -68,13 +68,19 @@ class PostgresConnectionPool(IDBTransactional):
         if self._echo:
             self._logger.info("Database pool created with connections", pool_size=self._pool_size)
 
+    async def _ensure_pool(self) -> asyncpg.Pool:
+        if self._pool is None:
+            async with self._connect_lock:
+                if self._pool is None:
+                    await self._connect()
+        if self._pool is None:
+            raise RuntimeError("Postgres pool not initialized after connect")
+        return self._pool
+
     @asynccontextmanager
     async def get_connection(self) -> AsyncGenerator[PoolConnectionProxy, None]:
-        if not self._pool:
-            async with self._connect_lock:
-                await self._connect()
-
-        async with self._pool.acquire() as conn:
+        pool = await self._ensure_pool()
+        async with pool.acquire() as conn:
             yield conn
 
     @asynccontextmanager
