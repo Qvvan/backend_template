@@ -87,6 +87,15 @@ def test_init_project_renames_and_prunes(tmp_path: Path) -> None:
     assert "KafkaConfig" not in (tmp_path / "src/core/config.py").read_text()
 
 
+def test_copier_answers_keep_the_template_source(tmp_path: Path) -> None:
+    answers = tmp_path / ".copier-answers.yml"
+    answers.write_text("_src_path: gh:Qvvan/backend_template\nproject_name: shop\n")
+
+    init_project(tmp_path, "shop", enabled=set())
+
+    assert "_src_path: gh:Qvvan/backend_template" in answers.read_text()
+
+
 def test_invalid_project_name(tmp_path: Path) -> None:
     with pytest.raises(InitError):
         init_project(tmp_path, "My-Service", enabled=set())

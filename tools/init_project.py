@@ -88,6 +88,8 @@ REMOVE: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 _SKIP_DIRS = frozenset({".git", ".venv", "node_modules", "__pycache__", ".ruff_cache", ".pytest_cache"})
+# copier's answers point to the template (`_src_path`); renaming them would break `copier update`
+_SKIP_FILES = frozenset({".copier-answers.yml"})
 _IF = re.compile(r"^\s*(?:#|<!--)\s*\[(if|ifc) (?P<expr>[^\]]+)\]\s*(?:-->)?\s*$")
 _ENDIF = re.compile(r"^\s*(?:#|<!--)\s*\[endif\]\s*(?:-->)?\s*$")
 _EXPR = re.compile(r"^[a-z_ ()]+$")
@@ -144,7 +146,8 @@ def process_regions(text: str, flags: dict[str, bool], source: str = "<text>") -
 
 def _text_files(root: Path) -> Iterable[Path]:
     for path in root.rglob("*"):
-        if path.is_file() and not _SKIP_DIRS.intersection(path.relative_to(root).parts):
+        rel = path.relative_to(root)
+        if path.is_file() and rel.name not in _SKIP_FILES and not _SKIP_DIRS.intersection(rel.parts):
             yield path
 
 
