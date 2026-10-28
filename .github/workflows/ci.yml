@@ -55,6 +55,32 @@ jobs:
       - run: uv sync --locked
       - run: uv run pytest -m integration
 
+  scaffold:
+    name: Generated code passes every check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Generate a feature with events, a plain feature, a worker and consumers for both brokers
+        run: |
+          uv run python -m tools.scaffold feature order --fields "title:str amount:int price:float paid:bool due:date? shipped_at:datetime? note:str?" --events
+          uv run python -m tools.scaffold feature category --fields "name:str"
+          uv run python -m tools.scaffold worker cleanup --interval 30
+          uv run python -m tools.scaffold consumer order_paid --broker rabbitmq --fields "order_id:str amount:int"
+          uv run python -m tools.scaffold consumer payment_failed --broker kafka --fields "payment_id:str reason:str?"
+      - run: uv run ruff check src/ tests/ tools/ --no-fix
+      - run: uv run ruff format src/ tests/ tools/ --check
+      - run: uv run pyright
+      - run: uv run lint-imports
+      - run: uv run python -m tools.check_architecture
+      - run: uv run pytest
+      - name: Generated repositories against real Postgres (applies generated migrations)
+        run: uv run pytest -m integration tests/integration/repositories tests/integration/test_outbox_inbox.py
+
   docker:
     name: Docker image
     runs-on: ubuntu-latest

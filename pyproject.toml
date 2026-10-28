@@ -30,6 +30,7 @@ dev = [
     "granian[reload, uvloop]>=2.6.1",
     "httpx>=0.28.1",
     "import-linter>=2.15",
+    "jinja2>=3.1.6",
     "pika>=1.4.1",
     "pre-commit>=4.6.0",
     "psycopg2-binary>=2.9.12",
@@ -185,6 +186,15 @@ forbidden_modules = [
 ]
 # api.dependencies reads the Container, which imports everything — only direct imports are checked
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Integration events are contracts: they depend only on core.events and domain"
+type = "forbidden"
+source_modules = ["src.events"]
+forbidden_modules = [
+    "src.api", "src.core.config", "src.core.container", "src.entrypoints", "src.infrastructure", "src.interfaces",
+    "src.main", "src.services", "src.workers",
+]
 
 [[tool.importlinter.contracts]]
 name = "Core building blocks (exceptions, logger, events, config) do not depend on application layers"

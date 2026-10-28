@@ -4,6 +4,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+DEFAULT_PAGE_SIZE = 50
+MAX_PAGE_SIZE = 500
+
 
 class ErrorResponse(BaseModel):
     """Body of every error response returned by the API."""

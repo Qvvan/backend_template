@@ -1,0 +1,18 @@
+from __future__ import annotations
+
+from datetime import date, datetime
+from typing import ClassVar
+
+from src.core.events import IntegrationEvent
+
+
+class {{ n.pascal }}Message(IntegrationEvent):
+    """Incoming `{{ routing_key }}` event. The same class can be used to publish it."""
+
+    destination: ClassVar[str] = "{{ destination }}"  # {{ 'RabbitMQ exchange' if broker == 'rabbitmq' else 'Kafka topic' }}
+    routing_key: ClassVar[str] = "{{ routing_key }}"
+
+{% for f in fields %}
+    {{ f.name }}: {{ f.annotation }}{% if f.optional %} = None{% endif %}
+
+{% endfor %}

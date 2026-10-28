@@ -1,0 +1,81 @@
+from __future__ import annotations
+
+from src.core.exceptions import NotFoundError
+from src.domain.entities.page import PageEntity
+from src.domain.entities.{{ n.snake }} import {{ n.pascal }}Entity
+{% if events %}
+from src.events.{{ n.snake }}_events import {{ n.pascal }}CreatedEvent, {{ n.pascal }}DeletedEvent, {{ n.pascal }}UpdatedEvent
+from src.interfaces.clients.db.uow import IUnitOfWork
+{% endif %}
+from src.interfaces.repositories.{{ n.snake }}_repository import I{{ n.pascal }}Repository
+from src.interfaces.services.{{ n.snake }}_service import I{{ n.pascal }}Service
+
+
+class {{ n.pascal }}Service(I{{ n.pascal }}Service):
+{% if events %}
+    """Writes go through the unit of work together with an outbox event, so the change and the event
+    are committed atomically; the outbox relay publishes the event afterwards."""
+
+    __slots__ = ("_repo", "_uow")
+
+    def __init__(self, repo: I{{ n.pascal }}Repository, uow: IUnitOfWork) -> None:
+        self._repo = repo
+        self._uow = uow
+
+    async def create(self, entity: {{ n.pascal }}Entity) -> {{ n.pascal }}Entity:
+        async with self._uow.begin() as session:
+            saved = await session.{{ n.plural }}.save(entity)
+            await session.outbox.add({{ n.pascal }}CreatedEvent.from_entity(saved).to_message())
+        return saved
+{% else %}
+    __slots__ = ("_repo",)
+
+    def __init__(self, repo: I{{ n.pascal }}Repository) -> None:
+        self._repo = repo
+
+    async def create(self, entity: {{ n.pascal }}Entity) -> {{ n.pascal }}Entity:
+        return await self._repo.save(entity)
+{% endif %}
+
+    async def get_by_id(self, {{ n.snake }}_id: str) -> {{ n.pascal }}Entity:
+        entity = await self._repo.find_by_id({{ n.snake }}_id)
+        if entity is None:
+            raise NotFoundError("{{ n.pascal }}", {{ n.snake }}_id)
+        return entity
+
+    async def get_page(self, *, limit: int, offset: int) -> PageEntity[{{ n.pascal }}Entity]:
+        items = await self._repo.find_many(limit=limit, offset=offset)
+        total = await self._repo.count()
+        return PageEntity(items=items, total=total, limit=limit, offset=offset)
+
+{% if events %}
+    async def update(self, {{ n.snake }}_id: str, changes: {{ n.pascal }}Entity) -> {{ n.pascal }}Entity:
+        async with self._uow.begin() as session:
+            entity = await session.{{ n.plural }}.find_by_id({{ n.snake }}_id)
+            if entity is None:
+                raise NotFoundError("{{ n.pascal }}", {{ n.snake }}_id)
+            entity.update_from(changes)
+            updated = await session.{{ n.plural }}.update(entity)
+            if updated is None:
+                raise NotFoundError("{{ n.pascal }}", {{ n.snake }}_id)
+            await session.outbox.add({{ n.pascal }}UpdatedEvent.from_entity(updated).to_message())
+        return updated
+
+    async def delete(self, {{ n.snake }}_id: str) -> None:
+        async with self._uow.begin() as session:
+            if not await session.{{ n.plural }}.delete({{ n.snake }}_id):
+                raise NotFoundError("{{ n.pascal }}", {{ n.snake }}_id)
+            await session.outbox.add({{ n.pascal }}DeletedEvent({{ n.snake }}_id={{ n.snake }}_id).to_message())
+{% else %}
+    async def update(self, {{ n.snake }}_id: str, changes: {{ n.pascal }}Entity) -> {{ n.pascal }}Entity:
+        entity = await self.get_by_id({{ n.snake }}_id)
+        entity.update_from(changes)
+        updated = await self._repo.update(entity)
+        if updated is None:
+            raise NotFoundError("{{ n.pascal }}", {{ n.snake }}_id)
+        return updated
+
+    async def delete(self, {{ n.snake }}_id: str) -> None:
+        if not await self._repo.delete({{ n.snake }}_id):
+            raise NotFoundError("{{ n.pascal }}", {{ n.snake }}_id)
+{% endif %}

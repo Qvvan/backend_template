@@ -20,6 +20,8 @@ class ITransactionSession(ABC):
     def inbox(self) -> IInboxRepository:
         raise NotImplementedError
 
+    # scaffold:session-interface
+
 
 class IUnitOfWork(ABC):
     @abstractmethod

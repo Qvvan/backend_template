@@ -33,6 +33,7 @@ class WorkerContainer:
                 logger=self._logger,
                 interval=self._config.messaging.OUTBOX_POLL_INTERVAL,
             ),
+            # scaffold:workers
             # Пример:
             # CleanupWorker(service=self._services.cleanup, logger=self._logger, interval=60),
         ]

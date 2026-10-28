@@ -1,0 +1,43 @@
+from __future__ import annotations
+
+from datetime import date, datetime
+from typing import ClassVar, Self
+
+from src.core.events import IntegrationEvent
+from src.domain.entities.{{ n.snake }} import {{ n.pascal }}Entity
+
+
+class {{ n.pascal }}CreatedEvent(IntegrationEvent):
+    destination: ClassVar[str] = "{{ n.plural }}"
+    routing_key: ClassVar[str] = "{{ n.snake }}.created"
+
+    {{ n.snake }}_id: str
+{% for f in fields %}
+    {{ f.name }}: {{ f.annotation }}
+{% endfor %}
+
+    @classmethod
+    def from_entity(cls, entity: {{ n.pascal }}Entity) -> Self:
+        return cls(
+            {{ n.snake }}_id=entity.id,
+{% for f in fields %}
+            {{ f.name }}=entity.{{ f.name }},
+{% endfor %}
+        )
+
+    def partition_key(self) -> str | None:
+        return self.{{ n.snake }}_id
+
+
+class {{ n.pascal }}UpdatedEvent({{ n.pascal }}CreatedEvent):
+    routing_key: ClassVar[str] = "{{ n.snake }}.updated"
+
+
+class {{ n.pascal }}DeletedEvent(IntegrationEvent):
+    destination: ClassVar[str] = "{{ n.plural }}"
+    routing_key: ClassVar[str] = "{{ n.snake }}.deleted"
+
+    {{ n.snake }}_id: str
+
+    def partition_key(self) -> str | None:
+        return self.{{ n.snake }}_id

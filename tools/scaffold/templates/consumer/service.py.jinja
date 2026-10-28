@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+from src.core.logger import AppLogger
+from src.domain.entities.{{ n.snake }} import {{ n.pascal }}Entity
+from src.interfaces.clients.db.uow import IUnitOfWork
+from src.interfaces.services.{{ n.snake }}_service import I{{ n.pascal }}Service
+
+_CONSUMER = "{{ n.snake }}"
+
+
+class {{ n.pascal }}Service(I{{ n.pascal }}Service):
+    """Idempotent consumer: the inbox record and the business change share one transaction."""
+
+    __slots__ = ("_logger", "_uow")
+
+    def __init__(self, uow: IUnitOfWork, logger: AppLogger) -> None:
+        self._uow = uow
+        self._logger = logger
+
+    async def handle(self, event: {{ n.pascal }}Entity) -> None:
+        async with self._uow.begin() as session:
+            if not await session.inbox.register(event.message_id, _CONSUMER):
+                self._logger.info("Duplicate message skipped", consumer=_CONSUMER, message_id=event.message_id)
+                return
+            # TODO: business changes in the same transaction, e.g. `await session.orders.update(...)`

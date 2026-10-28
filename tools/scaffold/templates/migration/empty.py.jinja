@@ -1,0 +1,18 @@
+"""{{ title }}"""
+
+from yoyo import step
+
+__depends__ = {{ depends }}
+
+steps = [
+    step(
+        # apply
+        """
+        -- TODO: SQL
+        """,
+        # rollback (required)
+        """
+        -- TODO: SQL that undoes the step above
+        """,
+    ),
+]

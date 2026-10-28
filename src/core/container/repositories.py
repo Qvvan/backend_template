@@ -16,3 +16,5 @@ class RepositoryContainer:
     @cached_property
     def redis(self) -> ICacheRepository:
         return RedisRepository(client=self._infra.redis_db.client)
+
+    # scaffold:repositories

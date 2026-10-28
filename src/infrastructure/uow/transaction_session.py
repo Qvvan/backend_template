@@ -26,6 +26,8 @@ class TransactionSession(ITransactionSession):
     def inbox(self) -> IInboxRepository:
         return PostgresInboxRepository(self._tx)
 
+    # scaffold:session-repositories
+
     # Pattern: add one @property per aggregate when UoW spans multiple tables
     # (declare it in ITransactionSession too).
     # Example:

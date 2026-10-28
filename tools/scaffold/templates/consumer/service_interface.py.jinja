@@ -1,0 +1,12 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+
+from src.domain.entities.{{ n.snake }} import {{ n.pascal }}Entity
+
+
+class I{{ n.pascal }}Service(ABC):
+    @abstractmethod
+    async def handle(self, event: {{ n.pascal }}Entity) -> None:
+        """Process the event exactly once (redeliveries are skipped)."""
+        raise NotImplementedError

@@ -1,0 +1,34 @@
+from __future__ import annotations
+
+from datetime import date, datetime
+
+from pydantic import BaseModel, ConfigDict
+
+
+class Create{{ n.pascal }}Request(BaseModel):
+{% for f in fields %}
+    {{ f.name }}: {{ f.annotation }}{% if f.optional %} = None{% endif %}
+
+{% endfor %}
+
+
+class Update{{ n.pascal }}Request(Create{{ n.pascal }}Request):
+    """PUT: every field is replaced."""
+
+
+class {{ n.pascal }}Response(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+{% for f in fields %}
+    {{ f.name }}: {{ f.annotation }}
+{% endfor %}
+    created_at: datetime
+    updated_at: datetime
+
+
+class {{ n.pascal }}ListResponse(BaseModel):
+    items: list[{{ n.pascal }}Response]
+    total: int
+    limit: int
+    offset: int

@@ -40,20 +40,6 @@ class InMemoryInboxRepository(IInboxRepository):
         return True
 
 
-class FakeTransactionSession(ITransactionSession):
-    def __init__(self, outbox: InMemoryOutboxRepository, inbox: InMemoryInboxRepository) -> None:
-        self._outbox = outbox
-        self._inbox = inbox
-
-    @property
-    def outbox(self) -> IOutboxRepository:
-        return self._outbox
-
-    @property
-    def inbox(self) -> IInboxRepository:
-        return self._inbox
-
-
 class FakeUnitOfWork(IUnitOfWork):
     """In-memory UoW: repositories are shared between transactions; counts commits and rollbacks.
 
@@ -63,14 +49,30 @@ class FakeUnitOfWork(IUnitOfWork):
     def __init__(self) -> None:
         self.outbox = InMemoryOutboxRepository()
         self.inbox = InMemoryInboxRepository()
+        # scaffold:fake-uow-repositories
         self.commits = 0
         self.rollbacks = 0
 
     @asynccontextmanager
     async def begin(self) -> AsyncIterator[ITransactionSession]:
         try:
-            yield FakeTransactionSession(self.outbox, self.inbox)
+            yield FakeTransactionSession(self)
         except BaseException:
             self.rollbacks += 1
             raise
         self.commits += 1
+
+
+class FakeTransactionSession(ITransactionSession):
+    def __init__(self, uow: FakeUnitOfWork) -> None:
+        self._uow = uow
+
+    @property
+    def outbox(self) -> IOutboxRepository:
+        return self._uow.outbox
+
+    @property
+    def inbox(self) -> IInboxRepository:
+        return self._uow.inbox
+
+    # scaffold:fake-session-repositories

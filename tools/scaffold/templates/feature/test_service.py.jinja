@@ -1,0 +1,110 @@
+from __future__ import annotations
+
+from datetime import UTC, date, datetime
+
+import pytest
+
+from src.core.exceptions import NotFoundError
+from src.domain.entities.{{ n.snake }} import {{ n.pascal }}Entity
+from src.services.{{ n.snake }}_service import {{ n.pascal }}Service
+from tests.fakes.{{ n.snake }}_repository import InMemory{{ n.pascal }}Repository
+{% if events %}
+from tests.fakes.uow import FakeUnitOfWork
+{% endif %}
+
+
+def _entity() -> {{ n.pascal }}Entity:
+    return {{ n.pascal }}Entity({% for f in fields %}{{ f.name }}={{ f.type.sample }}{% if not loop.last %}, {% endif %}{% endfor %})
+
+
+def _changes() -> {{ n.pascal }}Entity:
+    return {{ n.pascal }}Entity({% for f in fields %}{{ f.name }}={{ f.type.sample_alt }}{% if not loop.last %}, {% endif %}{% endfor %})
+
+
+{% if events %}
+@pytest.fixture
+def uow() -> FakeUnitOfWork:
+    return FakeUnitOfWork()
+
+
+@pytest.fixture
+def repo(uow: FakeUnitOfWork) -> InMemory{{ n.pascal }}Repository:
+    return uow.{{ n.plural }}
+
+
+@pytest.fixture
+def service(repo: InMemory{{ n.pascal }}Repository, uow: FakeUnitOfWork) -> {{ n.pascal }}Service:
+    return {{ n.pascal }}Service(repo=repo, uow=uow)
+{% else %}
+@pytest.fixture
+def repo() -> InMemory{{ n.pascal }}Repository:
+    return InMemory{{ n.pascal }}Repository()
+
+
+@pytest.fixture
+def service(repo: InMemory{{ n.pascal }}Repository) -> {{ n.pascal }}Service:
+    return {{ n.pascal }}Service(repo=repo)
+{% endif %}
+
+
+async def test_create_saves_{{ n.snake }}(service: {{ n.pascal }}Service, repo: InMemory{{ n.pascal }}Repository) -> None:
+    created = await service.create(_entity())
+    assert repo.items[created.id] == created
+
+
+async def test_get_by_id_returns_{{ n.snake }}(service: {{ n.pascal }}Service) -> None:
+    created = await service.create(_entity())
+    assert await service.get_by_id(created.id) == created
+
+
+async def test_get_by_id_raises_not_found_when_missing(service: {{ n.pascal }}Service) -> None:
+    with pytest.raises(NotFoundError):
+        await service.get_by_id("00000000-0000-0000-0000-000000000000")
+
+
+async def test_get_page_returns_items_and_total(service: {{ n.pascal }}Service) -> None:
+    for _ in range(3):
+        await service.create(_entity())
+    page = await service.get_page(limit=2, offset=0)
+    assert len(page.items) == 2
+    assert page.total == 3
+
+
+async def test_update_replaces_fields(service: {{ n.pascal }}Service) -> None:
+    created = await service.create(_entity())
+    updated = await service.update(created.id, _changes())
+{% for f in fields %}
+    assert updated.{{ f.name }} {{ f.type.compare }} {{ f.type.sample_alt }}
+{% endfor %}
+    assert updated.id == created.id
+    assert updated.updated_at >= created.updated_at
+
+
+async def test_update_raises_not_found_when_missing(service: {{ n.pascal }}Service) -> None:
+    with pytest.raises(NotFoundError):
+        await service.update("00000000-0000-0000-0000-000000000000", _changes())
+
+
+async def test_delete_removes_{{ n.snake }}(service: {{ n.pascal }}Service, repo: InMemory{{ n.pascal }}Repository) -> None:
+    created = await service.create(_entity())
+    await service.delete(created.id)
+    assert created.id not in repo.items
+
+
+async def test_delete_raises_not_found_when_missing(service: {{ n.pascal }}Service) -> None:
+    with pytest.raises(NotFoundError):
+        await service.delete("00000000-0000-0000-0000-000000000000")
+{% if events %}
+
+
+async def test_writes_publish_events_through_outbox(service: {{ n.pascal }}Service, uow: FakeUnitOfWork) -> None:
+    created = await service.create(_entity())
+    await service.update(created.id, _changes())
+    await service.delete(created.id)
+    assert [m.routing_key for m in uow.outbox.messages] == [
+        "{{ n.snake }}.created",
+        "{{ n.snake }}.updated",
+        "{{ n.snake }}.deleted",
+    ]
+    assert all(m.payload["{{ n.snake }}_id"] == created.id for m in uow.outbox.messages)
+{% endif %}

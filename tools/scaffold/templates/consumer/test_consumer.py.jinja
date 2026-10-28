@@ -1,0 +1,39 @@
+from __future__ import annotations
+
+from datetime import UTC, date, datetime
+from unittest.mock import AsyncMock
+
+from src.core.logger import AppLogger
+from src.domain.entities.{{ n.snake }} import {{ n.pascal }}Entity
+from src.infrastructure.messaging.{{ broker }}.handlers.{{ n.snake }}_handler import {{ n.pascal }}Handler
+from src.infrastructure.messaging.{{ broker }}.handlers.schemas.{{ n.snake }}_schemas import {{ n.pascal }}Message
+from src.interfaces.services.{{ n.snake }}_service import I{{ n.pascal }}Service
+from src.services.{{ n.snake }}_service import {{ n.pascal }}Service
+from tests.fakes.uow import FakeUnitOfWork
+
+_LOGGER = AppLogger(level="DEBUG")
+
+
+def _message() -> {{ n.pascal }}Message:
+    return {{ n.pascal }}Message({% for f in fields %}{{ f.name }}={{ f.type.sample }}{% if not loop.last %}, {% endif %}{% endfor %})
+
+
+async def test_handler_maps_message_to_entity() -> None:
+    service = AsyncMock(spec=I{{ n.pascal }}Service)
+    message = _message()
+    await {{ n.pascal }}Handler(service=service, logger=_LOGGER).handle(message)
+    service.handle.assert_awaited_once_with(
+        {{ n.pascal }}Entity(message_id=message.event_id, {% for f in fields %}{{ f.name }}={{ f.type.sample }}{% if not loop.last %}, {% endif %}{% endfor %})
+    )
+
+
+async def test_service_processes_each_message_once() -> None:
+    uow = FakeUnitOfWork()
+    service = {{ n.pascal }}Service(uow=uow, logger=_LOGGER)
+    event = {{ n.pascal }}Entity(message_id="m-1", {% for f in fields %}{{ f.name }}={{ f.type.sample }}{% if not loop.last %}, {% endif %}{% endfor %})
+
+    await service.handle(event)
+    await service.handle(event)  # redelivery
+
+    assert uow.inbox.processed == {("m-1", "{{ n.snake }}")}
+    assert uow.commits == 2

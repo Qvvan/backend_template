@@ -59,9 +59,9 @@ run-scheduler: ## Фоновые воркеры с hot reload (порт 8002, а
 
 ## Генерация кода
 
-feature: ## CRUD-фича: make feature name=order fields="title:str amount:int"
+feature: ## CRUD-фича: make feature name=order fields="title:str amount:int note:str?" [events=1]
 	@test -n "$(name)" || (echo 'Укажи имя: make feature name=order fields="title:str amount:int"' && exit 1)
-	uv run python -m tools.scaffold feature $(name) --fields "$(fields)"
+	uv run python -m tools.scaffold feature $(name) --fields "$(fields)" $(if $(events),--events)
 
 worker: ## Периодический воркер: make worker name=cleanup interval=60
 	@test -n "$(name)" || (echo "Укажи имя: make worker name=cleanup interval=60" && exit 1)

@@ -1,0 +1,35 @@
+from __future__ import annotations
+
+import dataclasses
+
+from src.domain.entities.{{ n.snake }} import {{ n.pascal }}Entity
+from src.interfaces.repositories.{{ n.snake }}_repository import I{{ n.pascal }}Repository
+
+
+class InMemory{{ n.pascal }}Repository(I{{ n.pascal }}Repository):
+    def __init__(self) -> None:
+        self.items: dict[str, {{ n.pascal }}Entity] = {}
+
+    async def find_by_id(self, {{ n.snake }}_id: str) -> {{ n.pascal }}Entity | None:
+        entity = self.items.get({{ n.snake }}_id)
+        return dataclasses.replace(entity) if entity else None
+
+    async def find_many(self, *, limit: int, offset: int) -> list[{{ n.pascal }}Entity]:
+        ordered = sorted(self.items.values(), key=lambda e: (e.created_at, e.id), reverse=True)
+        return [dataclasses.replace(e) for e in ordered[offset : offset + limit]]
+
+    async def count(self) -> int:
+        return len(self.items)
+
+    async def save(self, entity: {{ n.pascal }}Entity) -> {{ n.pascal }}Entity:
+        self.items[entity.id] = dataclasses.replace(entity)
+        return dataclasses.replace(entity)
+
+    async def update(self, entity: {{ n.pascal }}Entity) -> {{ n.pascal }}Entity | None:
+        if entity.id not in self.items:
+            return None
+        self.items[entity.id] = dataclasses.replace(entity)
+        return dataclasses.replace(entity)
+
+    async def delete(self, {{ n.snake }}_id: str) -> bool:
+        return self.items.pop({{ n.snake }}_id, None) is not None
