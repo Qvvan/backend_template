@@ -4,12 +4,14 @@ import asyncio
 import uuid
 
 import aio_pika
-import pytest
+from aio_pika.abc import AbstractIncomingMessage
 from pydantic import BaseModel
 
+from src.core.events import MessageHeader
 from src.core.logger import AppLogger
-from src.infrastructure.messaging.rabbitmq.client import RabbitMQClient
+from src.infrastructure.messaging.rabbitmq.client import RabbitMQClient, dead_letter_queue_name
 from src.interfaces.messaging.rabbitmq.client import AMQPExchangeType
+from tests.integration.conftest import RABBIT_RETRY_DELAYS
 
 
 class _Msg(BaseModel):
@@ -118,28 +120,39 @@ async def test_close_is_idempotent(rabbit_client: RabbitMQClient) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Error-path / resilience tests
+# Error-path / resilience tests: retries and dead-letter queue
 # ---------------------------------------------------------------------------
 
 
-async def test_handler_exception_drops_message(rabbit_client: RabbitMQClient) -> None:
-    """Handler, бросающий исключение, не вызывает повторной доставки (requeue=False).
-    Инвариант: call_count == 1 — сообщение обработано ровно один раз и отброшено."""
+async def _get_from_dlq(client: RabbitMQClient, queue: str, timeout: float = 5.0) -> AbstractIncomingMessage:
+    dlq = await client._ch.declare_queue(dead_letter_queue_name(queue), durable=True, passive=True)
+    deadline = asyncio.get_running_loop().time() + timeout
+    while asyncio.get_running_loop().time() < deadline:
+        message = await dlq.get(fail=False)
+        if message is not None:
+            await message.ack()
+            return message
+        await asyncio.sleep(0.05)
+    raise AssertionError(f"no message in {dead_letter_queue_name(queue)}")
+
+
+async def _dlq_size(client: RabbitMQClient, queue: str) -> int:
+    dlq = await client._ch.declare_queue(dead_letter_queue_name(queue), durable=True, passive=True)
+    return dlq.declaration_result.message_count or 0
+
+
+async def test_failing_handler_is_retried_then_moved_to_dlq(rabbit_client: RabbitMQClient) -> None:
+    """Handler that always fails: 1 attempt + one per retry delay, then the message lands in <queue>.dlq."""
     exchange = _unique_name("test.ex")
     queue = _unique_name("test.q")
-    routing_key = "test.drop"
+    routing_key = "test.fail"
+    expected_calls = 1 + len(RABBIT_RETRY_DELAYS)
 
     call_count = 0
-    first_call = asyncio.Event()
-    second_call = asyncio.Event()
 
     async def failing_handler(msg: _Msg) -> None:
         nonlocal call_count
         call_count += 1
-        if call_count == 1:
-            first_call.set()
-        else:
-            second_call.set()
         raise RuntimeError("intentional failure")
 
     await rabbit_client.consume(
@@ -150,21 +163,48 @@ async def test_handler_exception_drops_message(rabbit_client: RabbitMQClient) ->
         routing_key=routing_key,
         exchange_type=AMQPExchangeType.Topic,
     )
-    await rabbit_client.publish(exchange, routing_key, {"value": "drop_me"})
-    await asyncio.wait_for(first_call.wait(), timeout=5.0)
+    await rabbit_client.publish(exchange, routing_key, {"value": "dead"}, message_id="m-dead")
 
-    # Если бы requeue=True, broker вернул бы сообщение и second_call.set() сработал бы.
-    # При requeue=False он не срабатывает — ждём timeout.
-    with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(second_call.wait(), timeout=0.5)
-
-    assert call_count == 1
+    dead = await _get_from_dlq(rabbit_client, queue)
+    assert call_count == expected_calls
+    assert dead.message_id == "m-dead"
+    assert dead.headers[MessageHeader.RETRY_COUNT] == len(RABBIT_RETRY_DELAYS)
+    assert "intentional failure" in str(dead.headers[MessageHeader.ERROR])
     await rabbit_client.cancel_consumer()
 
 
-async def test_consume_invalid_json_drops_message(rabbit_client: RabbitMQClient) -> None:
-    """Сообщение с невалидным JSON отбрасывается (JSONDecodeError перехватывается до вызова handler).
-    Инвариант: после плохого сообщения консьюмер жив и доставляет следующее корректное сообщение."""
+async def test_transient_failure_is_retried_and_succeeds(rabbit_client: RabbitMQClient) -> None:
+    exchange = _unique_name("test.ex")
+    queue = _unique_name("test.q")
+    routing_key = "test.transient"
+
+    attempts = 0
+    done = asyncio.Event()
+
+    async def flaky_handler(msg: _Msg) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("temporary failure")
+        done.set()
+
+    await rabbit_client.consume(
+        queue_name=queue,
+        handler=flaky_handler,
+        model=_Msg,
+        exchange=exchange,
+        routing_key=routing_key,
+    )
+    await rabbit_client.publish(exchange, routing_key, {"value": "retry_me"})
+    await asyncio.wait_for(done.wait(), timeout=5.0)
+
+    assert attempts == 2
+    assert await _dlq_size(rabbit_client, queue) == 0
+    await rabbit_client.cancel_consumer()
+
+
+async def test_consume_invalid_json_goes_to_dlq_without_retries(rabbit_client: RabbitMQClient) -> None:
+    """Невалидный JSON сразу уходит в DLQ (без ретраев), консьюмер жив и доставляет следующее сообщение."""
     exchange = _unique_name("test.ex")
     queue = _unique_name("test.q")
     routing_key = "test.badjson"
@@ -186,22 +226,20 @@ async def test_consume_invalid_json_drops_message(rabbit_client: RabbitMQClient)
     )
 
     # Публикуем сырые байты напрямую, минуя RabbitMQClient.publish() (который всегда даёт валидный JSON).
-    # _declare_exchange возвращает объект из кэша — exchange уже объявлен consume() выше.
     ex = await rabbit_client._declare_exchange(exchange, AMQPExchangeType.Topic)
     await ex.publish(aio_pika.Message(body=b"{not valid json}"), routing_key=routing_key)
-
-    # Следующее корректное сообщение должно дойти — консьюмер не упал.
     await rabbit_client.publish(exchange, routing_key, {"value": "after_bad"})
     await asyncio.wait_for(done.wait(), timeout=5.0)
 
-    assert len(received) == 1
-    assert received[0].value == "after_bad"
+    dead = await _get_from_dlq(rabbit_client, queue)
+    assert dead.body == b"{not valid json}"
+    assert dead.headers[MessageHeader.RETRY_COUNT] == 0
+    assert [m.value for m in received] == ["after_bad"]
     await rabbit_client.cancel_consumer()
 
 
-async def test_consume_pydantic_validation_error_drops_message(rabbit_client: RabbitMQClient) -> None:
-    """Сообщение с валидным JSON, не прошедшее pydantic-валидацию, отбрасывается (ValidationError перехватывается до вызова handler).
-    Инвариант: после плохого сообщения консьюмер жив и доставляет следующее корректное сообщение."""
+async def test_consume_pydantic_validation_error_goes_to_dlq(rabbit_client: RabbitMQClient) -> None:
+    """Валидный JSON, не прошедший pydantic-валидацию, уходит в DLQ; handler его не видит."""
     exchange = _unique_name("test.ex")
     queue = _unique_name("test.q")
     routing_key = "test.badschema"
@@ -224,11 +262,39 @@ async def test_consume_pydantic_validation_error_drops_message(rabbit_client: Ra
 
     # Валидный JSON, но поле 'value' отсутствует — pydantic поднимет ValidationError.
     await rabbit_client.publish(exchange, routing_key, {"wrong_field": "oops"})
-
-    # Следующее корректное сообщение должно дойти — консьюмер не упал.
     await rabbit_client.publish(exchange, routing_key, {"value": "after_bad"})
     await asyncio.wait_for(done.wait(), timeout=5.0)
 
-    assert len(received) == 1
-    assert received[0].value == "after_bad"
+    dead = await _get_from_dlq(rabbit_client, queue)
+    assert b"wrong_field" in dead.body
+    assert "validation error" in str(dead.headers[MessageHeader.ERROR])
+    assert [m.value for m in received] == ["after_bad"]
+    await rabbit_client.cancel_consumer()
+
+
+async def test_request_id_header_is_restored_in_handler_context(rabbit_client: RabbitMQClient) -> None:
+    exchange = _unique_name("test.ex")
+    queue = _unique_name("test.q")
+    routing_key = "test.reqid"
+
+    seen: list[str | None] = []
+    done = asyncio.Event()
+
+    async def handler(msg: _Msg) -> None:
+        seen.append(AppLogger.get_request_id())
+        done.set()
+
+    await rabbit_client.consume(
+        queue_name=queue,
+        handler=handler,
+        model=_Msg,
+        exchange=exchange,
+        routing_key=routing_key,
+    )
+    await rabbit_client.publish(
+        exchange, routing_key, {"value": "x"}, headers={MessageHeader.REQUEST_ID.value: "req-from-api"}
+    )
+    await asyncio.wait_for(done.wait(), timeout=5.0)
+
+    assert seen == ["req-from-api"]
     await rabbit_client.cancel_consumer()

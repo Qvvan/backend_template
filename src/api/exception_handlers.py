@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import JSONResponse
 from starlette import status
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request
@@ -30,25 +30,25 @@ def _error_response(
     comment: str,
     obj: list[dict[str, Any]] | dict[str, Any] | None = None,
     headers: Mapping[str, str] | None = None,
-) -> ORJSONResponse:
+) -> JSONResponse:
     request_id: str | None = getattr(request.state, "request_id", None)
     response_headers = dict(headers or {})
     if request_id:
         # Responses produced by ServerErrorMiddleware bypass RequestLoggingMiddleware, so set it here too.
         response_headers[REQUEST_ID_HEADER] = request_id
     body = ErrorResponse(code=code, comment=comment, obj=obj, request_id=request_id)
-    return ORJSONResponse(status_code=status_code, content=body.model_dump(), headers=response_headers)
+    return JSONResponse(status_code=status_code, content=body.model_dump(mode="json"), headers=response_headers)
 
 
 def register_errors(app: FastAPI) -> None:
     """Every error leaves the API as ErrorResponse: {status, code, comment, obj, request_id}."""
 
     @app.exception_handler(AppError)
-    async def handle_app_error(request: Request, exc: AppError) -> ORJSONResponse:
+    async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
         return _error_response(request, status_code=exc.http_status_code, code=exc.code, comment=exc.message)
 
     @app.exception_handler(RequestValidationError)
-    async def handle_request_validation_error(request: Request, exc: RequestValidationError) -> ORJSONResponse:
+    async def handle_request_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
         errors = [{"loc": list(err["loc"]), "msg": err["msg"], "type": err["type"]} for err in exc.errors()]
         return _error_response(
             request,
@@ -59,7 +59,7 @@ def register_errors(app: FastAPI) -> None:
         )
 
     @app.exception_handler(StarletteHTTPException)
-    async def handle_http_error(request: Request, exc: StarletteHTTPException) -> ORJSONResponse:
+    async def handle_http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         return _error_response(
             request,
             status_code=exc.status_code,
@@ -69,7 +69,7 @@ def register_errors(app: FastAPI) -> None:
         )
 
     @app.exception_handler(Exception)
-    async def handle_unexpected_error(request: Request, _exc: Exception) -> ORJSONResponse:
+    async def handle_unexpected_error(request: Request, _exc: Exception) -> JSONResponse:
         # The exception itself is logged by RequestLoggingMiddleware; the client gets no internals.
         return _error_response(
             request,

@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from urllib.parse import quote_plus
 
 import asyncpg
+import orjson
 from asyncpg.pool import PoolConnectionProxy
 
 from src.core.logger import AppLogger
@@ -53,6 +54,14 @@ class PostgresConnectionPool(IDBTransactional):
 
         async def init_connection(connection: asyncpg.Connection) -> None:
             await connection.set_type_codec("uuid", encoder=str, decoder=str, schema="pg_catalog")
+            # json/jsonb columns accept and return Python dicts/lists
+            for json_type in ("json", "jsonb"):
+                await connection.set_type_codec(
+                    json_type,
+                    encoder=lambda value: orjson.dumps(value).decode(),
+                    decoder=orjson.loads,
+                    schema="pg_catalog",
+                )
 
         self._pool = await asyncpg.create_pool(
             self._dsn,

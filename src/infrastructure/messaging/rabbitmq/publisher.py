@@ -1,21 +1,27 @@
 from __future__ import annotations
 
-from typing import Any
-
-from src.core.logger import AppLogger
+from src.core.events import IntegrationEvent
+from src.domain.entities.messaging import OutgoingMessage
+from src.interfaces.messaging.publisher import IMessagePublisher
 from src.interfaces.messaging.rabbitmq.client import IAMQPClient
-from src.interfaces.messaging.rabbitmq.publisher import IMessagePublisher
 
 
-class MessagePublisher(IMessagePublisher):
-    """Общий publisher для всех событий"""
+class RabbitMQMessagePublisher(IMessagePublisher):
+    """Publishes integration events to RabbitMQ: destination = exchange, routing_key = routing key."""
 
-    __slots__ = ("_logger", "_rabbit")
+    __slots__ = ("_rabbit",)
 
-    def __init__(self, rabbit: IAMQPClient, logger: AppLogger) -> None:
+    def __init__(self, rabbit: IAMQPClient) -> None:
         self._rabbit = rabbit
-        self._logger = logger
 
-    async def publish(self, exchange: str, routing_key: str, payload: dict[str, Any]) -> None:
-        """Публикует событие"""
-        await self._rabbit.publish(exchange=exchange, routing_key=routing_key, payload=payload)
+    async def publish(self, event: IntegrationEvent) -> None:
+        await self.publish_message(event.to_message())
+
+    async def publish_message(self, message: OutgoingMessage) -> None:
+        await self._rabbit.publish(
+            exchange=message.destination,
+            routing_key=message.routing_key,
+            payload=message.payload,
+            headers=message.headers,
+            message_id=message.message_id,
+        )

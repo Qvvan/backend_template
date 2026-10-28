@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from enum import StrEnum
 from typing import Any, TypeVar
 
@@ -32,7 +32,15 @@ class IAMQPClient(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def publish(self, exchange: str, routing_key: str, payload: dict[str, Any]) -> None:
+    async def publish(
+        self,
+        exchange: str,
+        routing_key: str,
+        payload: dict[str, Any],
+        *,
+        headers: Mapping[str, str] | None = None,
+        message_id: str | None = None,
+    ) -> None:
         """Публикует сообщение в exchange"""
         raise NotImplementedError
 
@@ -46,6 +54,11 @@ class IAMQPClient(ABC):
         routing_key: str | None = None,
         exchange_type: str = AMQPExchangeType.Topic,
     ) -> None:
+        """Consume `queue_name`, validating every message with `model` before calling `handler`.
+
+        A message that fails validation goes straight to `<queue>.dlq`. A message whose handler raises
+        is retried with the client's retry delays and then moved to `<queue>.dlq`.
+        """
         raise NotImplementedError
 
     @abstractmethod

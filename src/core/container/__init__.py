@@ -17,10 +17,12 @@ class Container:
         self.infra = InfrastructureContainer(config, self.logger)
         self.repos = RepositoryContainer(self.infra)
         self.services = ServiceContainer(
+            config=config,
+            logger=self.logger,
             infra=self.infra,
             repos=self.repos,
         )
-        self.workers = WorkerContainer(logger=self.logger, services=self.services)
+        self.workers = WorkerContainer(config=config, logger=self.logger, services=self.services)
 
     async def closer(self) -> None:
         await self.workers.close()

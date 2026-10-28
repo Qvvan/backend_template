@@ -56,13 +56,13 @@ class _ListHandler(logging.Handler):
 
 
 @pytest.fixture
-def logged(app_logger: AppLogger) -> Iterator[list[str]]:
+def logged() -> Iterator[list[str]]:
     """Messages written through AppLogger during the test (the 'app' logger does not propagate)."""
     handler = _ListHandler()
-    app_logger_ = logging.getLogger("app")
-    app_logger_.addHandler(handler)
+    logger = logging.getLogger("app")
+    logger.addHandler(handler)
     yield handler.messages
-    app_logger_.removeHandler(handler)
+    logger.removeHandler(handler)
 
 
 # ── request id ────────────────────────────────────────────────────────────────

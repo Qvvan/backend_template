@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import Field, SecretStr
@@ -54,6 +55,8 @@ class RabbitMQConfig(ConfigBase):
     TLS_ENABLED: bool
     CERT_PATH: str | None = None
     PREFETCH_COUNT: int = 10
+    # Delay before each retry of a failed message, seconds; after the last one it goes to <queue>.dlq
+    RETRY_DELAYS: tuple[float, ...] = (1.0, 10.0, 60.0)
 
 
 class KafkaConfig(ConfigBase):
@@ -67,8 +70,10 @@ class KafkaConfig(ConfigBase):
     SASL_MECHANISM: str | None = None
     SASL_USERNAME: str | None = None
     SASL_PASSWORD: SecretStr | None = None
-    ENABLE_AUTO_COMMIT: bool = True
     AUTO_OFFSET_RESET: Literal["latest", "earliest", "none"] = "latest"
+    # In-process retries of a failed message (backoff doubles each time); then it goes to <topic>.dlq
+    MAX_RETRIES: int = 3
+    RETRY_BACKOFF: float = 1.0
 
 
 class RedisConfig(ConfigBase):
@@ -97,6 +102,21 @@ class MinIOConfig(ConfigBase):
     SECURE: bool = False
 
 
+class MessageBroker(StrEnum):
+    RABBITMQ = "rabbitmq"
+    KAFKA = "kafka"
+
+
+class MessagingConfig(ConfigBase):
+    """Publishing of integration events and the transactional outbox"""
+
+    model_config = SettingsConfigDict(env_prefix="MESSAGING_", frozen=True)
+
+    PUBLISHER: MessageBroker = MessageBroker.RABBITMQ
+    OUTBOX_BATCH_SIZE: int = 100
+    OUTBOX_POLL_INTERVAL: float = 1.0
+
+
 class Config(ConfigBase):
     """Главный класс конфигурации"""
 
@@ -109,3 +129,4 @@ class Config(ConfigBase):
     kafka: KafkaConfig = Field(default_factory=KafkaConfig)  # type: ignore[arg-type]
     redis: RedisConfig = Field(default_factory=RedisConfig)  # type: ignore[arg-type]
     minio: MinIOConfig = Field(default_factory=MinIOConfig)  # type: ignore[arg-type]
+    messaging: MessagingConfig = Field(default_factory=MessagingConfig)

@@ -28,7 +28,8 @@ class IKafkaClient(ABC):
         topic: str,
         payload: dict[str, Any],
         key: str | None = None,
-        headers: Mapping[str, bytes] | None = None,
+        headers: Mapping[str, str] | None = None,
+        message_id: str | None = None,
     ) -> None:
         """Публикует сообщение в топик"""
         raise NotImplementedError
@@ -41,7 +42,11 @@ class IKafkaClient(ABC):
         handler: Callable[[T], Awaitable[None]],
         model: type[T],
     ) -> None:
-        """Запускает фоновое потребление топика consumer-группой"""
+        """Запускает фоновое потребление топика consumer-группой.
+
+        Offsets are committed only after a message is handled (at-least-once). A message that fails
+        validation, or whose handler keeps failing after retries, is sent to `<topic>.dlq`.
+        """
         raise NotImplementedError
 
     @abstractmethod

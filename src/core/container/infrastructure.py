@@ -2,16 +2,19 @@ from __future__ import annotations
 
 from functools import cached_property
 
-from src.core.config import Config
+from src.core.config import Config, MessageBroker
 from src.core.logger import AppLogger
 from src.infrastructure.messaging.kafka.client import KafkaClient
+from src.infrastructure.messaging.kafka.publisher import KafkaMessagePublisher
 from src.infrastructure.messaging.rabbitmq.client import RabbitMQClient
+from src.infrastructure.messaging.rabbitmq.publisher import RabbitMQMessagePublisher
 from src.infrastructure.repository.postgresql.client.connection import PostgresConnectionPool
 from src.infrastructure.repository.postgresql.client.query_executor import PostgresQueryExecutor
 from src.infrastructure.repository.redis.client import RedisDB
 from src.infrastructure.storage.minio.client import MinIOClient
 from src.infrastructure.uow.postgres_uow import PostgresUnitOfWork
 from src.interfaces.clients.db.query_executor import IQueryExecutor
+from src.interfaces.messaging.publisher import IMessagePublisher
 
 
 class InfrastructureContainer:
@@ -55,6 +58,7 @@ class InfrastructureContainer:
             tls_enabled=self._config.rabbitmq.TLS_ENABLED,
             cert_path=self._config.rabbitmq.CERT_PATH,
             prefetch_count=self._config.rabbitmq.PREFETCH_COUNT,
+            retry_delays=self._config.rabbitmq.RETRY_DELAYS,
             logger=self._logger,
         )
 
@@ -69,10 +73,17 @@ class InfrastructureContainer:
             sasl_password=(
                 self._config.kafka.SASL_PASSWORD.get_secret_value() if self._config.kafka.SASL_PASSWORD else None
             ),
-            enable_auto_commit=self._config.kafka.ENABLE_AUTO_COMMIT,
             auto_offset_reset=self._config.kafka.AUTO_OFFSET_RESET,
+            max_retries=self._config.kafka.MAX_RETRIES,
+            retry_backoff=self._config.kafka.RETRY_BACKOFF,
             logger=self._logger,
         )
+
+    @cached_property
+    def message_publisher(self) -> IMessagePublisher:
+        if self._config.messaging.PUBLISHER == MessageBroker.KAFKA:
+            return KafkaMessagePublisher(kafka=self.kafka)
+        return RabbitMQMessagePublisher(rabbit=self.rabbitmq)
 
     @cached_property
     def postgresql_query_executor(self) -> IQueryExecutor:

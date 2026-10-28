@@ -1,23 +1,41 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, TypeVar
 
-from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
-from pydantic import BaseModel
+import orjson
+import pydantic
+from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, ConsumerRecord, TopicPartition
 
+from src.core.events import MessageHeader
 from src.core.logger import AppLogger
 from src.interfaces.messaging.kafka.client import IKafkaClient
 
-T = TypeVar("T", bound=BaseModel)
+T = TypeVar("T", bound=pydantic.BaseModel)
 
 _SASL_PROTOCOLS = frozenset({"SASL_PLAINTEXT", "SASL_SSL"})
+_MAX_ERROR_HEADER_LENGTH = 1000
+
+
+def dead_letter_topic_name(topic: str) -> str:
+    return f"{topic}.dlq"
+
+
+def _header(record: ConsumerRecord[bytes, bytes], name: str) -> str | None:
+    for key, value in record.headers:
+        if key == name:
+            return value.decode()
+    return None
 
 
 class KafkaClient(IKafkaClient):
-    """Kafka клиент для публикации и потребления сообщений"""
+    """Kafka клиент для публикации и потребления сообщений.
+
+    Consumers commit offsets manually after a message is handled (at-least-once). A handler error is
+    retried in-process with exponential backoff; after the last retry — or right away if the payload is
+    invalid — the message is sent to `<topic>.dlq` with the error in the `x-error` header.
+    """
 
     __slots__ = (
         "_auto_offset_reset",
@@ -26,9 +44,10 @@ class KafkaClient(IKafkaClient):
         "_connect_lock",
         "_consumer_tasks",
         "_consumers",
-        "_enable_auto_commit",
         "_logger",
+        "_max_retries",
         "_producer",
+        "_retry_backoff",
         "_sasl_mechanism",
         "_sasl_password",
         "_sasl_username",
@@ -44,8 +63,9 @@ class KafkaClient(IKafkaClient):
         sasl_mechanism: str | None = None,
         sasl_username: str | None = None,
         sasl_password: str | None = None,
-        enable_auto_commit: bool = True,
         auto_offset_reset: str = "latest",
+        max_retries: int = 3,
+        retry_backoff: float = 1.0,
     ) -> None:
         self._bootstrap_servers = bootstrap_servers
         self._client_id = client_id
@@ -53,8 +73,9 @@ class KafkaClient(IKafkaClient):
         self._sasl_mechanism = sasl_mechanism
         self._sasl_username = sasl_username
         self._sasl_password = sasl_password
-        self._enable_auto_commit = enable_auto_commit
         self._auto_offset_reset = auto_offset_reset
+        self._max_retries = max_retries
+        self._retry_backoff = retry_backoff
         self._logger = logger
         self._producer: AIOKafkaProducer | None = None
         self._consumers: dict[str, AIOKafkaConsumer] = {}
@@ -74,21 +95,25 @@ class KafkaClient(IKafkaClient):
         """Устанавливает соединение с Kafka (запускает producer)"""
         if self._producer is not None:
             return
-        self._producer = AIOKafkaProducer(
+        producer = AIOKafkaProducer(
             bootstrap_servers=self._bootstrap_servers,
             client_id=self._client_id,
             security_protocol=self._security_protocol,
+            acks="all",
+            enable_idempotence=True,
             **self._build_sasl_kwargs(),
         )
-        await self._producer.start()
+        await producer.start()
+        self._producer = producer
 
-    async def _ensure_connected(self) -> None:
+    async def _ensure_producer(self) -> AIOKafkaProducer:
         if not self._producer:
             async with self._connect_lock:
                 if not self._producer:
                     await self.connect()
         if self._producer is None:
             raise RuntimeError("Kafka producer not initialized after connect")
+        return self._producer
 
     async def close(self) -> None:
         """Закрывает соединение и все consumer'ы"""
@@ -102,16 +127,18 @@ class KafkaClient(IKafkaClient):
         topic: str,
         payload: dict[str, Any],
         key: str | None = None,
-        headers: Mapping[str, bytes] | None = None,
+        headers: Mapping[str, str] | None = None,
+        message_id: str | None = None,
     ) -> None:
-        await self._ensure_connected()
-        if self._producer is None:
-            raise RuntimeError("Kafka producer not initialized")
-        await self._producer.send_and_wait(
+        producer = await self._ensure_producer()
+        all_headers = dict(headers or {})
+        if message_id:
+            all_headers[MessageHeader.MESSAGE_ID.value] = message_id
+        await producer.send_and_wait(
             topic,
-            value=json.dumps(payload).encode(),
+            value=orjson.dumps(payload),
             key=key.encode() if key else None,
-            headers=list(headers.items()) if headers else None,
+            headers=[(name, value.encode()) for name, value in all_headers.items()] or None,
         )
 
     async def consume(
@@ -127,25 +154,75 @@ class KafkaClient(IKafkaClient):
             client_id=self._client_id,
             group_id=group_id,
             security_protocol=self._security_protocol,
-            enable_auto_commit=self._enable_auto_commit,
+            enable_auto_commit=False,
             auto_offset_reset=self._auto_offset_reset,
             **self._build_sasl_kwargs(),
         )
         await consumer.start()
-        self._consumers[topic] = consumer
+        consumer_key = f"{topic}:{group_id}"
+        self._consumers[consumer_key] = consumer
 
         async def _run() -> None:
-            async for message in consumer:
-                if message.value is None:
-                    continue
+            async for record in consumer:
+                token = AppLogger.bind_request_id(_header(record, MessageHeader.REQUEST_ID))
                 try:
-                    raw = json.loads(message.value.decode())
-                    payload = model.model_validate(raw)
-                    await handler(payload)
-                except Exception as e:
-                    self._logger.error("Message handler failed", error=e, topic=topic)
+                    await self._process(record, handler, model)
+                finally:
+                    AppLogger.reset_request_id(token)
+                await consumer.commit({TopicPartition(record.topic, record.partition): record.offset + 1})
 
-        self._consumer_tasks[topic] = asyncio.create_task(_run())
+        self._consumer_tasks[consumer_key] = asyncio.create_task(_run())
+
+    async def _process(
+        self,
+        record: ConsumerRecord[bytes, bytes],
+        handler: Callable[[T], Awaitable[None]],
+        model: type[T],
+    ) -> None:
+        try:
+            payload = model.model_validate_json(record.value or b"")
+        except pydantic.ValidationError as exc:
+            self._logger.error("Invalid message moved to DLQ", topic=record.topic, offset=record.offset)
+            await self._dead_letter(record, exc, attempts=0)
+            return
+
+        for attempt in range(1, self._max_retries + 2):
+            try:
+                await handler(payload)
+            except Exception as exc:
+                if attempt > self._max_retries:
+                    self._logger.error(
+                        "Message handler failed, retries exhausted, moved to DLQ",
+                        topic=record.topic,
+                        offset=record.offset,
+                        attempts=attempt,
+                    )
+                    await self._dead_letter(record, exc, attempts=attempt)
+                    return
+                delay = self._retry_backoff * 2 ** (attempt - 1)
+                self._logger.warning(
+                    "Message handler failed, retrying",
+                    topic=record.topic,
+                    offset=record.offset,
+                    attempt=attempt,
+                    delay_seconds=delay,
+                    error=repr(exc),
+                )
+                await asyncio.sleep(delay)
+            else:
+                return
+
+    async def _dead_letter(self, record: ConsumerRecord[bytes, bytes], exc: Exception, *, attempts: int) -> None:
+        producer = await self._ensure_producer()
+        headers = [(name, value) for name, value in record.headers if name != MessageHeader.ERROR]
+        headers.append((MessageHeader.ERROR.value, repr(exc)[:_MAX_ERROR_HEADER_LENGTH].encode()))
+        headers.append((MessageHeader.RETRY_COUNT.value, str(attempts).encode()))
+        await producer.send_and_wait(
+            dead_letter_topic_name(record.topic),
+            value=record.value,
+            key=record.key,
+            headers=headers,
+        )
 
     async def cancel_consumer(self) -> None:
         """Останавливает все запущенные consumer'ы"""
@@ -161,9 +238,8 @@ class KafkaClient(IKafkaClient):
     async def health_check(self) -> bool:
         try:
             async with asyncio.timeout(5):
-                await self._ensure_connected()
-                if self._producer is not None:
-                    await self._producer.client.fetch_all_metadata()
+                producer = await self._ensure_producer()
+                await producer.client.fetch_all_metadata()
             return True
         except Exception as e:
             self._logger.error("Kafka health check failed", error=e)

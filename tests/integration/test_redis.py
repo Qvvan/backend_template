@@ -128,4 +128,3 @@ async def test_keys_by_pattern(redis_repo: RedisRepository) -> None:
     found = await redis_repo.scan_keys(f"{_KEY}scan_*")
     assert set(found) == set(keys)
     await redis_repo.delete_many(keys)
-
