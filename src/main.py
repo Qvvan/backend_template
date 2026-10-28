@@ -50,8 +50,9 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(
-        RequestLoggingMiddleware,  # type: ignore
+        RequestLoggingMiddleware,  # type: ignore[arg-type]  # Starlette's middleware typing rejects plain ASGI classes
         logger=container.logger,
+        quiet_paths=frozenset({"/metrics"}),
     )
 
     app.include_router(router, prefix="/api")

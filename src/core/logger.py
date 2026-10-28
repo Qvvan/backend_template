@@ -4,7 +4,7 @@ import json
 import logging
 import sys
 import threading
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from datetime import UTC, datetime
 from typing import Any
 
@@ -61,6 +61,19 @@ class AppLogger:
     @classmethod
     def clear_request_id(cls) -> None:
         request_context.set(None)
+
+    @classmethod
+    def get_request_id(cls) -> str | None:
+        return request_context.get()
+
+    @classmethod
+    def bind_request_id(cls, request_id: str | None) -> Token[str | None]:
+        """Set request id for the current context; pass the token to `reset_request_id` when done."""
+        return request_context.set(request_id)
+
+    @classmethod
+    def reset_request_id(cls, token: Token[str | None]) -> None:
+        request_context.reset(token)
 
     @staticmethod
     def _extra(fields: dict[str, Any]) -> dict[str, Any]:
