@@ -103,7 +103,11 @@ class KafkaClient(IKafkaClient):
             enable_idempotence=True,
             **self._build_sasl_kwargs(),
         )
-        await producer.start()
+        try:
+            await producer.start()
+        except Exception:
+            await producer.stop()  # release the half-open client, otherwise it leaks
+            raise
         self._producer = producer
 
     async def _ensure_producer(self) -> AIOKafkaProducer:

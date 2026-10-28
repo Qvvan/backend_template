@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from src.core.config import Config
 from src.core.container import Container
+from src.core.telemetry import shutdown_tracing
 from src.entrypoints.app_builder import build_app
 
 
@@ -23,5 +24,12 @@ def create_consumer_app(config: Config | None = None, container: Container | Non
         await app_container.consumers.start()  # fails fast if a broker is unreachable
         yield
         await app_container.closer()
+        shutdown_tracing()
 
-    return build_app(title="Consumer", container=app_container, debug=cfg.app.DEBUG, lifespan=lifespan)
+    return build_app(
+        title="Consumer",
+        container=app_container,
+        debug=cfg.app.DEBUG,
+        telemetry=cfg.telemetry,
+        lifespan=lifespan,
+    )

@@ -117,6 +117,16 @@ class MessagingConfig(ConfigBase):
     OUTBOX_POLL_INTERVAL: float = 1.0
 
 
+class TelemetryConfig(ConfigBase):
+    """OpenTelemetry tracing (OTLP over HTTP). Names match the standard OTEL_* variables."""
+
+    model_config = SettingsConfigDict(env_prefix="OTEL_", frozen=True)
+
+    ENABLED: bool = False
+    SERVICE_NAME: str = "backend_template"
+    EXPORTER_OTLP_ENDPOINT: str = "http://localhost:4318"
+
+
 class Config(ConfigBase):
     """Главный класс конфигурации"""
 
@@ -130,3 +140,4 @@ class Config(ConfigBase):
     redis: RedisConfig = Field(default_factory=RedisConfig)  # type: ignore[arg-type]
     minio: MinIOConfig = Field(default_factory=MinIOConfig)  # type: ignore[arg-type]
     messaging: MessagingConfig = Field(default_factory=MessagingConfig)
+    telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)

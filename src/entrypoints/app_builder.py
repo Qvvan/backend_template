@@ -10,7 +10,9 @@ from starlette.middleware.cors import CORSMiddleware
 from src.api.exception_handlers import register_errors
 from src.api.health import router as health_router
 from src.api.middleware.request_logging import RequestLoggingMiddleware
+from src.core.config import TelemetryConfig
 from src.core.container import Container
+from src.core.telemetry import instrument_app, setup_tracing
 
 METRICS_PATH = "/metrics"
 # Probes and metrics are scraped every few seconds: keep them out of request logs and metrics
@@ -22,11 +24,17 @@ def build_app(
     title: str,
     container: Container,
     debug: bool,
+    telemetry: TelemetryConfig,
     lifespan: Callable[[FastAPI], AbstractAsyncContextManager[None]],
     routers: Sequence[APIRouter] = (),
     cors_origins: Sequence[str] = (),
 ) -> FastAPI:
-    """FastAPI app with everything every process needs: errors, request id, logging, health, metrics."""
+    """FastAPI app with everything every process needs: errors, request id, logging, health, metrics, traces."""
+    if telemetry.ENABLED:
+        setup_tracing(
+            service_name=f"{telemetry.SERVICE_NAME}-{title.lower()}",
+            otlp_endpoint=telemetry.EXPORTER_OTLP_ENDPOINT,
+        )
     app = FastAPI(
         title=title,
         lifespan=lifespan,
@@ -57,4 +65,6 @@ def build_app(
     Instrumentator(excluded_handlers=list(QUIET_PATHS)).instrument(app).expose(
         app, endpoint=METRICS_PATH, include_in_schema=False
     )
+    if telemetry.ENABLED:
+        instrument_app(app)
     return app

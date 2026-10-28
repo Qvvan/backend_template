@@ -13,3 +13,15 @@ class ErrorResponse(BaseModel):
     comment: str
     obj: list[dict[str, Any]] | dict[str, Any] | None = None
     request_id: str | None = None
+
+
+HealthStatus = Literal["ok", "error"]
+
+
+class LivenessResponse(BaseModel):
+    status: HealthStatus
+
+
+class ReadinessResponse(BaseModel):
+    status: HealthStatus
+    checks: dict[str, HealthStatus]

@@ -8,6 +8,8 @@ from contextvars import ContextVar, Token
 from datetime import UTC, datetime
 from typing import Any
 
+from opentelemetry import trace
+
 _handler_lock = threading.Lock()
 
 request_context: ContextVar[str | None] = ContextVar("request_id", default=None)
@@ -24,6 +26,11 @@ class JsonFormatter(logging.Formatter):
             "request_id": getattr(record, "request_id", None),
             "logger": record.name,
         }
+
+        span_context = trace.get_current_span().get_span_context()
+        if span_context.is_valid:
+            payload["trace_id"] = format(span_context.trace_id, "032x")
+            payload["span_id"] = format(span_context.span_id, "016x")
 
         fields = getattr(record, "fields", None)
         if isinstance(fields, dict):

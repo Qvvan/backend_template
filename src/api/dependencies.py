@@ -8,6 +8,7 @@ from src.interfaces.clients.db.connection import IDBTransactional
 from src.interfaces.clients.storage.client import IStorageClient
 from src.interfaces.messaging.kafka.client import IKafkaClient
 from src.interfaces.messaging.rabbitmq.client import IAMQPClient
+from src.interfaces.services.health_service import IHealthService
 from src.interfaces.workers.scheduler import IScheduler
 
 
@@ -37,3 +38,10 @@ def get_minio(request: Request) -> IStorageClient:
 
 def get_scheduler(request: Request) -> IScheduler:
     return request.app.state.container.workers.scheduler
+
+
+def get_health_service(request: Request) -> IHealthService:
+    return request.app.state.container.services.health
+
+
+# scaffold:dependencies

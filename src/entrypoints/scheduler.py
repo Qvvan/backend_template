@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from src.api.v1.workers import router as workers_router
 from src.core.config import Config
 from src.core.container import Container
+from src.core.telemetry import shutdown_tracing
 from src.entrypoints.app_builder import build_app
 
 
@@ -24,11 +25,13 @@ def create_scheduler_app(config: Config | None = None, container: Container | No
         app_container.workers.start()
         yield
         await app_container.closer()
+        shutdown_tracing()
 
     return build_app(
         title="Scheduler",
         container=app_container,
         debug=cfg.app.DEBUG,
+        telemetry=cfg.telemetry,
         lifespan=lifespan,
         routers=[workers_router],
     )
