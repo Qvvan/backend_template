@@ -44,11 +44,6 @@ def _free_port() -> int:
         return sock.getsockname()[1]
 
 
-@pytest.fixture
-def logger() -> AppLogger:
-    return AppLogger(level="DEBUG")
-
-
 # ── PostgreSQL ────────────────────────────────────────────────────────────────
 
 
