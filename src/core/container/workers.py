@@ -47,4 +47,5 @@ class WorkerContainer:
         self.scheduler.start()
 
     async def close(self) -> None:
-        await self.scheduler.shutdown()
+        if "scheduler" in self.__dict__:
+            await self.scheduler.shutdown()
