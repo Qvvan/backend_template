@@ -1,24 +1,85 @@
+# Infrastructure:          docker compose up -d                          (make infra)
+# + app processes:         docker compose --profile app up -d --build    (make up)
+# + hot reload:            docker compose --profile app watch            (make watch)
+# + tracing (Jaeger UI):   docker compose --profile observability up -d  (make up-obs)
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: backend_template:local
+  restart: unless-stopped
+  profiles:
+    - app
+  env_file:
+    - .env
+  # .env points to localhost for running on the host; inside compose services talk by name
+  environment:
+    POSTGRES_HOST: db
+    POSTGRES_PORT: "5432"
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
+    RABBITMQ_HOST: rabbitmq
+    RABBITMQ_PORT: "5672"
+    KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    MINIO_HOST: minio
+    MINIO_PORT: "9000"
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+    redis:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+    kafka:
+      condition: service_healthy
+    minio:
+      condition: service_healthy
+  networks:
+    - network
+  develop:
+    watch:
+      - action: sync+restart
+        path: ./src
+        target: /app/src
+      - action: rebuild
+        path: uv.lock
+
 services:
   api:
+    <<: *app
+    command: ["granian", "--factory", "src.main:create_app"]
+    ports:
+      - "${APP_PORT:-8008}:8000"
+
+  consumer:
+    <<: *app
+    command: ["granian", "--factory", "src.entrypoints.consumer:create_consumer_app"]
+
+  scheduler:
+    <<: *app
+    # Exactly one process: every scheduler instance would run every worker
+    command: ["granian", "--factory", "--workers", "1", "src.entrypoints.scheduler:create_scheduler_app"]
+    ports:
+      - "${SCHEDULER_PORT:-8009}:8000"
+
+  migrate:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: api
-    restart: on-failure
+      args:
+        EXTRA_GROUP: "--group migrations"
+    image: backend_template-migrate:local
     profiles:
       - app
-    entrypoint: ["granian", "--interface", "asgi", "--factory", "--loop", "uvloop", "--host", "0.0.0.0", "--workers", "1", "src.main:create_app"]
-    ports:
-      - "${APP_PORT}:8000"
-    env_file:
-      - .env
-#    depends_on:
-#      redis:
-#        condition: service_healthy
-#      db:
-#        condition: service_healthy
-#      rabbitmq:
-#        condition: service_healthy
+      - migrate
+    command: ["yoyo", "apply", "--batch", "--database", "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DATABASE}", "./migrations"]
+    healthcheck:
+      disable: true
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - network
 
@@ -49,7 +110,7 @@ services:
     restart: always
     ports:
       - "6378:6379"
-      - "8001:8001"
+      - "8001:8001"    # RedisInsight UI
     volumes:
       - redis_storage:/data
     healthcheck:
@@ -76,9 +137,10 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
       test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
-      interval: 30s
+      interval: 10s
       timeout: 10s
-      retries: 5
+      retries: 10
+      start_period: 10s
     networks:
       - network
 
@@ -106,9 +168,9 @@ services:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
       test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1" ]
-      interval: 30s
+      interval: 10s
       timeout: 10s
-      retries: 5
+      retries: 10
       start_period: 20s
     networks:
       - network
@@ -128,28 +190,21 @@ services:
       - minio_data:/data
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
-      interval: 30s
-      timeout: 20s
-      retries: 3
+      interval: 10s
+      timeout: 5s
+      retries: 5
       start_period: 10s
     networks:
       - network
 
-  migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        EXTRA_GROUP: "--group migrations"
-    container_name: migrate
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    container_name: jaeger
     profiles:
-      - migrate
-    command: [ "yoyo", "-vvv", "apply", "--batch", "--database", "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DATABASE}", "./migrations" ]
-    env_file:
-      - .env
-    depends_on:
-      db:
-        condition: service_healthy
+      - observability
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4318:4318"    # OTLP/HTTP
     networks:
       - network
 
