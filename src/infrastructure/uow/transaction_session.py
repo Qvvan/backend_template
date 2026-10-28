@@ -18,6 +18,7 @@ class TransactionSession(ITransactionSession):
     def executor(self) -> IQueryExecutor:
         return self._tx
 
+    # [if messaging]
     @property
     def outbox(self) -> IOutboxRepository:
         return PostgresOutboxRepository(self._tx)
@@ -25,6 +26,8 @@ class TransactionSession(ITransactionSession):
     @property
     def inbox(self) -> IInboxRepository:
         return PostgresInboxRepository(self._tx)
+
+    # [endif]
 
     # scaffold:session-repositories
 

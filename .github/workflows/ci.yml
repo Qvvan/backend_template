@@ -67,11 +67,20 @@ jobs:
       - run: uv sync --locked
       - name: Generate a feature with events, a plain feature, a worker and consumers for both brokers
         run: |
+          # [if messaging]
           uv run python -m tools.scaffold feature order --fields "title:str amount:int price:float paid:bool due:date? shipped_at:datetime? note:str?" --events
+          # [endif]
+          # [ifc not messaging]
+          # uv run python -m tools.scaffold feature order --fields "title:str amount:int price:float paid:bool due:date? shipped_at:datetime? note:str?"
+          # [endif]
           uv run python -m tools.scaffold feature category --fields "name:str"
           uv run python -m tools.scaffold worker cleanup --interval 30
+          # [if rabbitmq]
           uv run python -m tools.scaffold consumer order_paid --broker rabbitmq --fields "order_id:str amount:int"
+          # [endif]
+          # [if kafka]
           uv run python -m tools.scaffold consumer payment_failed --broker kafka --fields "payment_id:str reason:str?"
+          # [endif]
       - run: uv run ruff check src/ tests/ tools/ --no-fix
       - run: uv run ruff format src/ tests/ tools/ --check
       - run: uv run pyright
@@ -79,8 +88,46 @@ jobs:
       - run: uv run python -m tools.check_architecture
       - run: uv run pytest
       - name: Generated repositories against real Postgres (applies generated migrations)
-        run: uv run pytest -m integration tests/integration/repositories tests/integration/test_outbox_inbox.py
+        run: uv run pytest -m integration tests/integration/repositories
 
+  # [if template]
+  copier:
+    name: "Template: project from copier (${{ matrix.variant.name }})"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - { name: all, data: "--data redis=true --data rabbitmq=true --data kafka=true --data minio=true" }
+          - { name: postgres-only, data: "--data redis=false --data rabbitmq=false --data kafka=false --data minio=false" }
+          - { name: rabbitmq, data: "--data redis=false --data rabbitmq=true --data kafka=false --data minio=false" }
+          - { name: kafka, data: "--data redis=false --data rabbitmq=false --data kafka=true --data minio=false" }
+          - { name: redis-minio, data: "--data redis=true --data rabbitmq=false --data kafka=false --data minio=true" }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Generate the project
+        run: uvx copier copy --trust --defaults --vcs-ref HEAD --data project_name=demo_service ${{ matrix.variant.data }} . ../demo
+      - name: Checks in the generated project
+        working-directory: ../demo
+        run: |
+          uv sync --locked
+          uv run ruff check src/ tests/ tools/ --no-fix
+          uv run ruff format src/ tests/ tools/ --check
+          uv run pyright
+          uv run lint-imports
+          uv run python -m tools.check_architecture
+          uv run pytest
+          uv run pytest -m integration
+          ! grep -rnIE '\[(if|ifc|endif)[ \]]' --exclude-dir=.venv --exclude-dir=.git .
+          ! grep -rnI backend_template --exclude-dir=.venv --exclude-dir=.git .
+
+  # [endif]
   docker:
     name: Docker image
     runs-on: ubuntu-latest

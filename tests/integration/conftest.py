@@ -24,9 +24,15 @@ from src.infrastructure.uow.postgres_uow import PostgresUnitOfWork
 
 # Keep in sync with docker-compose.yml
 POSTGRES_IMAGE = "postgres:16.2"
+# [if redis]
 REDIS_IMAGE = "redis:7"
+# [endif]
+# [if rabbitmq]
 RABBITMQ_IMAGE = "rabbitmq:3.13-management"
+# [endif]
+# [if kafka]
 KAFKA_IMAGE = "apache/kafka:4.3.1"
+# [endif]
 
 MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
 MIGRATION_TABLE = "_yoyo_migration"
@@ -38,10 +44,14 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
             item.add_marker(pytest.mark.integration)
 
 
+# [if kafka]
 def _free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("localhost", 0))
         return sock.getsockname()[1]
+
+
+# [endif]
 
 
 # ── PostgreSQL ────────────────────────────────────────────────────────────────
@@ -98,6 +108,7 @@ async def db_executor(pg_pool: PostgresConnectionPool) -> AsyncGenerator[Postgre
             await tx.rollback()
 
 
+# [if redis]
 # ── Redis ─────────────────────────────────────────────────────────────────────
 
 
@@ -124,6 +135,10 @@ def redis_repo(redis_db: RedisDB) -> RedisRepository:
     return RedisRepository(redis_db.client)
 
 
+# [endif]
+
+
+# [if rabbitmq]
 # ── RabbitMQ ──────────────────────────────────────────────────────────────────
 
 RABBIT_RETRY_DELAYS = (0.1, 0.1)
@@ -152,6 +167,10 @@ async def rabbit_client(rabbit_container: RabbitMqContainer, logger: AppLogger) 
     await client.close()
 
 
+# [endif]
+
+
+# [if kafka]
 # ── Kafka ─────────────────────────────────────────────────────────────────────
 
 
@@ -191,3 +210,6 @@ async def kafka_client(kafka_bootstrap: str, logger: AppLogger) -> AsyncGenerato
     )
     yield client
     await client.close()
+
+
+# [endif]

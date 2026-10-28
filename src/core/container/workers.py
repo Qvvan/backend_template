@@ -28,11 +28,13 @@ class WorkerContainer:
     @cached_property
     def scheduler(self) -> AsyncScheduler:
         all_workers: list[IWorker] = [
+            # [if messaging]
             OutboxRelayWorker(
                 service=self._services.outbox_relay,
                 logger=self._logger,
                 interval=self._config.messaging.OUTBOX_POLL_INTERVAL,
             ),
+            # [endif]
             # scaffold:workers
             # Пример:
             # CleanupWorker(service=self._services.cleanup, logger=self._logger, interval=60),

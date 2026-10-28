@@ -23,6 +23,7 @@ class _StubWorker(IWorker):
         await stop.wait()
 
 
+# [if messaging]
 class _StubConsumer(IConsumer):
     def __init__(self) -> None:
         self.started = False
@@ -35,13 +36,24 @@ class _StubConsumer(IConsumer):
         self.stopped = True
 
 
+# [endif]
+
+
+FACTORIES = {
+    "api": create_app,
+    "scheduler": create_scheduler_app,
+    # [if messaging]
+    "consumer": create_consumer_app,
+    # [endif]
+}
+
+
 def _container() -> Container:
     return Container(make_config())
 
 
 def _route_paths(container: Container, factory_name: str) -> set[str]:
-    factories = {"api": create_app, "consumer": create_consumer_app, "scheduler": create_scheduler_app}
-    app = factories[factory_name](config=make_config(), container=container)
+    app = FACTORIES[factory_name](config=make_config(), container=container)
     return {getattr(route, "path", "") for route in app.routes}
 
 
@@ -49,7 +61,9 @@ def test_api_process_does_not_start_workers_or_consumers() -> None:
     container = _container()
     with TestClient(create_app(config=make_config(), container=container)):
         assert "scheduler" not in container.workers.__dict__
+        # [if messaging]
         assert "rabbitmq" not in container.consumers.__dict__
+        # [endif]
 
 
 def test_scheduler_process_runs_workers_and_stops_them() -> None:
@@ -64,16 +78,20 @@ def test_scheduler_process_runs_workers_and_stops_them() -> None:
     assert not scheduler.is_worker_running("stub")
 
 
+# [if messaging]
 def test_consumer_process_starts_and_stops_consumers() -> None:
     container = _container()
-    rabbit, kafka = _StubConsumer(), _StubConsumer()
-    container.consumers.__dict__.update(rabbitmq=rabbit, kafka=kafka)
+    container.consumers.__dict__.update(rabbitmq=_StubConsumer(), kafka=_StubConsumer())
+    consumers = [c for c in container.consumers.all if isinstance(c, _StubConsumer)]
+    assert consumers
 
     with TestClient(create_consumer_app(config=make_config(), container=container)):
-        assert rabbit.started and kafka.started
-        assert not rabbit.stopped
+        assert all(c.started and not c.stopped for c in consumers)
 
-    assert rabbit.stopped and kafka.stopped
+    assert all(c.stopped for c in consumers)
+
+
+# [endif]
 
 
 def test_workers_admin_api_lives_only_in_scheduler_process() -> None:
@@ -82,5 +100,5 @@ def test_workers_admin_api_lives_only_in_scheduler_process() -> None:
 
 
 def test_every_process_exposes_metrics() -> None:
-    for name in ("api", "consumer", "scheduler"):
+    for name in FACTORIES:
         assert "/metrics" in _route_paths(_container(), name)

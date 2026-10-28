@@ -27,6 +27,7 @@ class ServiceContainer:
         self._infra = infra
         self._repos = repos
 
+    # [if messaging]
     @cached_property
     def outbox_relay(self) -> IOutboxRelayService:
         return OutboxRelayService(
@@ -36,16 +37,26 @@ class ServiceContainer:
             batch_size=self._config.messaging.OUTBOX_BATCH_SIZE,
         )
 
+    # [endif]
+
     @cached_property
     def health(self) -> IHealthService:
         """Dependencies checked by /readyz."""
         return HealthService(
             checks={
                 "postgres": self._infra.postgres_db,
+                # [if redis]
                 "redis": self._infra.redis_db,
+                # [endif]
+                # [if rabbitmq]
                 "rabbitmq": self._infra.rabbitmq,
+                # [endif]
+                # [if kafka]
                 "kafka": self._infra.kafka,
+                # [endif]
+                # [if minio]
                 "minio": self._infra.minio_client,
+                # [endif]
             },
             logger=self._logger,
         )

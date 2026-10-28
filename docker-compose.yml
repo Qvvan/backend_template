@@ -17,25 +17,41 @@ x-app: &app
   environment:
     POSTGRES_HOST: db
     POSTGRES_PORT: "5432"
+    # [if redis]
     REDIS_HOST: redis
     REDIS_PORT: "6379"
+    # [endif]
+    # [if rabbitmq]
     RABBITMQ_HOST: rabbitmq
     RABBITMQ_PORT: "5672"
+    # [endif]
+    # [if kafka]
     KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    # [endif]
+    # [if minio]
     MINIO_HOST: minio
     MINIO_PORT: "9000"
+    # [endif]
     OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
   depends_on:
     migrate:
       condition: service_completed_successfully
+    # [if redis]
     redis:
       condition: service_healthy
+    # [endif]
+    # [if rabbitmq]
     rabbitmq:
       condition: service_healthy
+    # [endif]
+    # [if kafka]
     kafka:
       condition: service_healthy
+    # [endif]
+    # [if minio]
     minio:
       condition: service_healthy
+    # [endif]
   networks:
     - network
   develop:
@@ -53,9 +69,11 @@ services:
     ports:
       - "${APP_PORT:-8008}:8000"
 
+  # [if messaging]
   consumer:
     <<: *app
     command: ["granian", "--factory", "src.entrypoints.consumer:create_consumer_app"]
+  # [endif]
 
   scheduler:
     <<: *app
@@ -104,6 +122,7 @@ services:
     networks:
       - network
 
+  # [if redis]
   redis:
     image: redis/redis-stack:7.4.0-v3
     container_name: redis
@@ -122,6 +141,8 @@ services:
     networks:
       - network
 
+  # [endif]
+  # [if rabbitmq]
   rabbitmq:
     image: rabbitmq:3.13-management
     container_name: rabbitmq
@@ -144,6 +165,8 @@ services:
     networks:
       - network
 
+  # [endif]
+  # [if kafka]
   kafka:
     image: apache/kafka:4.3.1
     container_name: kafka
@@ -175,6 +198,8 @@ services:
     networks:
       - network
 
+  # [endif]
+  # [if minio]
   minio:
     image: minio/minio:RELEASE.2024-10-02T17-50-41Z
     container_name: minio
@@ -197,6 +222,7 @@ services:
     networks:
       - network
 
+  # [endif]
   jaeger:
     image: jaegertracing/all-in-one:1.62.0
     container_name: jaeger
@@ -213,13 +239,21 @@ networks:
     driver: bridge
 
 volumes:
+  # [if redis]
   redis_storage:
     driver: local
+  # [endif]
   postgres_data:
     driver: local
+  # [if rabbitmq]
   rabbitmq_data:
     driver: local
+  # [endif]
+  # [if kafka]
   kafka_data:
     driver: local
+  # [endif]
+  # [if minio]
   minio_data:
     driver: local
+  # [endif]

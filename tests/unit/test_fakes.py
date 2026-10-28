@@ -6,6 +6,7 @@ from tests.fakes.cache import InMemoryCacheRepository
 from tests.fakes.uow import FakeUnitOfWork
 
 
+# [if redis]
 async def test_in_memory_cache_behaves_like_redis_repository() -> None:
     cache = InMemoryCacheRepository()
     await cache.set("a:1", "1", expire=10)
@@ -18,6 +19,9 @@ async def test_in_memory_cache_behaves_like_redis_repository() -> None:
     assert await cache.increment("a:1", 4) == 5
     assert await cache.scan_keys("a:*") == ["a:1"]
     assert await cache.delete_many(["a:1", "b:1", "missing"]) == 2
+
+
+# [endif]
 
 
 async def test_fake_uow_counts_commits_and_rollbacks() -> None:

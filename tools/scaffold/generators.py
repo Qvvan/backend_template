@@ -41,6 +41,8 @@ def feature(root: Path, name: str, fields_raw: str | None, plural: str | None, e
     """CRUD slice through every layer: entity -> repository -> service -> API, plus migration and tests."""
     n = Names.parse(name, plural)
     fields = parse_fields(fields_raw)
+    if events and not (root / "src/core/events.py").exists():
+        raise ScaffoldError("--events needs a message broker, and this project has none")
     _ensure_free(root, SERVICES, "ServiceContainer", n.plural)
     _ensure_free(root, REPOSITORIES, "RepositoryContainer", n.plural)
 
@@ -98,6 +100,7 @@ def _feature_wiring(plan: Plan, n: Names, events: bool) -> None:
     repo_impl = (
         f"from src.infrastructure.repository.postgresql.{n.snake}_repository import Postgres{n.pascal}Repository"
     )
+    plan.add_import(REPOSITORIES, "from functools import cached_property")
     plan.add_import(REPOSITORIES, repo_interface)
     plan.add_import(REPOSITORIES, repo_impl)
     plan.insert(
@@ -110,6 +113,7 @@ def _feature_wiring(plan: Plan, n: Names, events: bool) -> None:
 
         """,
     )
+    plan.add_import(SERVICES, "from functools import cached_property")
     plan.add_import(SERVICES, f"from src.interfaces.services.{n.snake}_service import I{n.pascal}Service")
     plan.add_import(SERVICES, f"from src.services.{n.snake}_service import {n.pascal}Service")
     uow_arg = ", uow=self._infra.postgres_unit_of_work" if events else ""
@@ -187,6 +191,7 @@ def worker(root: Path, name: str, interval: float) -> Plan:
     plan.create(f"src/workers/{n.snake}_worker.py", render("worker/worker.py.jinja", **ctx))
     plan.create(f"tests/unit/workers/test_{n.snake}_worker.py", render("worker/test_worker.py.jinja", **ctx))
 
+    plan.add_import(SERVICES, "from functools import cached_property")
     plan.add_import(SERVICES, f"from src.interfaces.services.{n.snake}_service import I{n.pascal}Service")
     plan.add_import(SERVICES, f"from src.services.{n.snake}_service import {n.pascal}Service")
     plan.insert(
@@ -220,6 +225,8 @@ def consumer(
     """Idempotent consumer: message schema -> handler -> service (inbox) + registration."""
     if broker not in BROKERS:
         raise ScaffoldError(f"--broker must be one of: {', '.join(BROKERS)}")
+    if not (root / f"src/infrastructure/messaging/{broker}").exists():
+        raise ScaffoldError(f"{broker} is not part of this project")
     n = Names.parse(name)
     fields = parse_fields(fields_raw, default="entity_id:str")
     _ensure_free(root, SERVICES, "ServiceContainer", n.snake)
@@ -241,6 +248,7 @@ def consumer(
     _ensure_package(plan, "tests/unit/consumers")
     plan.create(f"tests/unit/consumers/test_{n.snake}_consumer.py", render("consumer/test_consumer.py.jinja", **ctx))
 
+    plan.add_import(SERVICES, "from functools import cached_property")
     plan.add_import(SERVICES, f"from src.interfaces.services.{n.snake}_service import I{n.pascal}Service")
     plan.add_import(SERVICES, f"from src.services.{n.snake}_service import {n.pascal}Service")
     plan.insert(

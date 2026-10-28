@@ -69,59 +69,104 @@ def test_invalid_fields_are_rejected(raw: str) -> None:
 
 
 def test_next_migration_numbers_and_depends(project: Path) -> None:
-    assert next_migration(project, "create_orders_table") == ("0003_create_orders_table", "0002_create_inbox_table")
+    migrations = project / "migrations"
+    shutil.rmtree(migrations)
+    migrations.mkdir()
+    assert next_migration(project, "first") == ("0001_first", None)
+    (migrations / "0001_first.py").write_text("")
+    (migrations / "0042_custom.py").write_text("")
+    assert next_migration(project, "next") == ("0043_next", "0042_custom")
 
 
 # ── generation ────────────────────────────────────────────────────────────────
 
 
 def test_feature_creates_every_layer_and_wires_it(project: Path) -> None:
-    touched = generators.feature(project, "order", "title:str amount:int", None, events=True).apply()
+    # [if messaging]
+    touched = generators.feature(project, "widget", "title:str amount:int", None, events=True).apply()
+    assert "src/events/widget_events.py" in touched
+    # [endif]
+    # [ifc not messaging]
+    # touched = generators.feature(project, "widget", "title:str amount:int", None, events=False).apply()
+    # [endif]
 
     _parses(project, touched)
+    assert any(p.startswith("migrations/") and p.endswith("_create_widgets_table.py") for p in touched)
     for path in (
-        "src/domain/entities/order.py",
-        "src/interfaces/repositories/order_repository.py",
-        "src/infrastructure/repository/postgresql/order_repository.py",
-        "src/services/order_service.py",
-        "src/api/v1/orders.py",
-        "src/events/order_events.py",
-        "migrations/0003_create_orders_table.py",
-        "tests/unit/services/test_order_service.py",
-        "tests/integration/repositories/test_order_repository.py",
+        "src/domain/entities/widget.py",
+        "src/interfaces/repositories/widget_repository.py",
+        "src/infrastructure/repository/postgresql/widget_repository.py",
+        "src/services/widget_service.py",
+        "src/api/v1/widgets.py",
+        "tests/unit/services/test_widget_service.py",
+        "tests/integration/repositories/test_widget_repository.py",
     ):
         assert path in touched
-    assert "def orders(self)" in (project / generators.SERVICES).read_text()
-    assert "def get_order_service" in (project / generators.DEPENDENCIES).read_text()
-    assert "v1_router.include_router(orders_router)" in (project / generators.V1_ROUTER).read_text()
-    assert "def orders(self)" in (project / generators.SESSION).read_text()
+    assert "def widgets(self)" in (project / generators.SERVICES).read_text()
+    assert "def get_widget_service" in (project / generators.DEPENDENCIES).read_text()
+    assert "v1_router.include_router(widgets_router)" in (project / generators.V1_ROUTER).read_text()
+    assert "def widgets(self)" in (project / generators.SESSION).read_text()
     assert "# scaffold:services" in (project / generators.SERVICES).read_text()  # marker kept for the next run
 
 
+# [if rabbitmq]
 def test_consumer_registers_handler(project: Path) -> None:
-    touched = generators.consumer(project, "order_paid", "rabbitmq", "order_id:str", None, None, None).apply()
+    touched = generators.consumer(project, "widget_paid", "rabbitmq", "order_id:str", None, None, None).apply()
 
     _parses(project, touched)
     consumer = (project / "src/infrastructure/messaging/rabbitmq/consumer.py").read_text()
-    assert '"_order_paid_handler"' in consumer
-    assert "order_paid_handler: OrderPaidHandler" in consumer
-    assert 'queue_name="backend_template.order_paid"' in consumer
-    assert "order_paid_handler=OrderPaidHandler(" in (project / generators.CONSUMERS).read_text()
+    assert '"_widget_paid_handler"' in consumer
+    assert "widget_paid_handler: WidgetPaidHandler" in consumer
+    assert 'queue_name="backend_template.widget_paid"' in consumer
+    assert "widget_paid_handler=WidgetPaidHandler(" in (project / generators.CONSUMERS).read_text()
 
 
+# [endif]
+
+
+# [if kafka]
+def test_kafka_consumer_registers_handler(project: Path) -> None:
+    touched = generators.consumer(project, "widget_failed", "kafka", "payment_id:str", None, None, None).apply()
+
+    _parses(project, touched)
+    consumer = (project / "src/infrastructure/messaging/kafka/consumer.py").read_text()
+    assert "topic=WidgetFailedMessage.destination" in consumer
+    assert 'group_id="backend_template"' in consumer
+
+
+# [endif]
+# [ifc not messaging]
+# def test_consumer_and_events_need_a_broker(project: Path) -> None:
+#     with pytest.raises(ScaffoldError, match="not part of this project"):
+#         generators.consumer(project, "widget_paid", "rabbitmq", None, None, None, None)
+#     with pytest.raises(ScaffoldError, match="broker"):
+#         generators.feature(project, "widget", None, None, events=True)
+#
+#
+# [endif]
 def test_worker_is_registered(project: Path) -> None:
-    generators.worker(project, "cleanup", 30).apply()
-    assert "CleanupWorker(service=self._services.cleanup" in (project / generators.WORKERS).read_text()
+    generators.worker(project, "widget_sweeper", 30).apply()
+    assert "WidgetSweeperWorker(service=self._services.widget_sweeper" in (project / generators.WORKERS).read_text()
 
 
 def test_second_run_fails_without_changing_anything(project: Path) -> None:
-    generators.feature(project, "order", None, None, events=False).apply()
+    generators.feature(project, "widget", None, None, events=False).apply()
     services_before = (project / generators.SERVICES).read_text()
 
     with pytest.raises(ScaffoldError):
-        generators.feature(project, "order", None, None, events=False).apply()
+        generators.feature(project, "widget", None, None, events=False).apply()
 
     assert (project / generators.SERVICES).read_text() == services_before
+
+
+def test_feature_adds_imports_the_container_may_lack(project: Path) -> None:
+    """In a project without Redis the repositories container has no cached_property import at all."""
+    repositories = project / generators.REPOSITORIES
+    repositories.write_text(repositories.read_text().replace("from functools import cached_property\n", ""))
+
+    generators.feature(project, "widget", None, None, events=False).apply()
+
+    assert "from functools import cached_property" in repositories.read_text()
 
 
 def test_missing_marker_fails_before_writing(project: Path) -> None:
@@ -129,6 +174,6 @@ def test_missing_marker_fails_before_writing(project: Path) -> None:
     services.write_text(services.read_text().replace("# scaffold:services", ""))
 
     with pytest.raises(ScaffoldError, match="marker"):
-        generators.feature(project, "order", None, None, events=False).apply()
+        generators.feature(project, "widget", None, None, events=False).apply()
 
-    assert not (project / "src/domain/entities/order.py").exists()
+    assert not (project / "src/domain/entities/widget.py").exists()

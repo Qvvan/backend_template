@@ -16,7 +16,7 @@ help: ## Показать список команд
 env: ## Создать .env из .env.example (если ещё нет)
 	@test -f .env || (cp .env.example .env && echo "Создан .env из .env.example")
 
-infra: env ## Поднять только инфраструктуру (Postgres, Redis, RabbitMQ, Kafka, MinIO)
+infra: env ## Поднять только инфраструктуру (Postgres и выбранные компоненты)
 	$(COMPOSE) up -d
 
 up: env ## Поднять всё: инфраструктура + миграции + api, consumer, scheduler
@@ -31,8 +31,8 @@ watch: env ## Поднять всё с hot reload (изменения в src/ п
 down: ## Остановить все контейнеры (данные в volumes сохраняются)
 	$(COMPOSE) --profile app --profile observability down
 
-logs: ## Логи приложения (api, consumer, scheduler)
-	$(COMPOSE) --profile app logs -f api consumer scheduler
+logs: ## Логи приложения
+	$(COMPOSE) --profile app logs -f
 
 ps: ## Статус контейнеров
 	$(COMPOSE) --profile app --profile observability ps
@@ -51,8 +51,10 @@ migration: ## Создать миграцию: make migration name=create_orders
 run-api: ## API с hot reload на http://localhost:8000
 	$(GRANIAN) --port 8000 src.main:create_app
 
+# [if messaging]
 run-consumer: ## Консьюмеры RabbitMQ/Kafka с hot reload (порт 8001 для /livez)
 	$(GRANIAN) --port 8001 src.entrypoints.consumer:create_consumer_app
+# [endif]
 
 run-scheduler: ## Фоновые воркеры с hot reload (порт 8002, админка /api/v1/workers)
 	$(GRANIAN) --port 8002 --workers 1 src.entrypoints.scheduler:create_scheduler_app
@@ -67,9 +69,11 @@ worker: ## Периодический воркер: make worker name=cleanup int
 	@test -n "$(name)" || (echo "Укажи имя: make worker name=cleanup interval=60" && exit 1)
 	uv run python -m tools.scaffold worker $(name) --interval $(or $(interval),60)
 
+# [if messaging]
 consumer: ## Консьюмер: make consumer name=order_paid broker=rabbitmq fields="order_id:str"
 	@test -n "$(name)" || (echo 'Укажи имя: make consumer name=order_paid broker=rabbitmq fields="order_id:str"' && exit 1)
 	uv run python -m tools.scaffold consumer $(name) --broker $(or $(broker),rabbitmq) --fields "$(fields)"
+# [endif]
 
 ## Качество кода
 

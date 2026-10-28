@@ -42,6 +42,7 @@ class AppConfig(ConfigBase):
     CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["*"])
 
 
+# [if rabbitmq]
 class RabbitMQConfig(ConfigBase):
     """Настройки RabbitMQ"""
 
@@ -59,6 +60,10 @@ class RabbitMQConfig(ConfigBase):
     RETRY_DELAYS: tuple[float, ...] = (1.0, 10.0, 60.0)
 
 
+# [endif]
+
+
+# [if kafka]
 class KafkaConfig(ConfigBase):
     """Настройки Kafka"""
 
@@ -76,6 +81,10 @@ class KafkaConfig(ConfigBase):
     RETRY_BACKOFF: float = 1.0
 
 
+# [endif]
+
+
+# [if redis]
 class RedisConfig(ConfigBase):
     """Настройки Redis"""
 
@@ -90,6 +99,10 @@ class RedisConfig(ConfigBase):
     SOCKET_CONNECT_TIMEOUT: float = 5.0
 
 
+# [endif]
+
+
+# [if minio]
 class MinIOConfig(ConfigBase):
     """MinIO object storage settings"""
 
@@ -102,9 +115,17 @@ class MinIOConfig(ConfigBase):
     SECURE: bool = False
 
 
+# [endif]
+
+
+# [if messaging]
 class MessageBroker(StrEnum):
+    # [if rabbitmq]
     RABBITMQ = "rabbitmq"
+    # [endif]
+    # [if kafka]
     KAFKA = "kafka"
+    # [endif]
 
 
 class MessagingConfig(ConfigBase):
@@ -112,9 +133,17 @@ class MessagingConfig(ConfigBase):
 
     model_config = SettingsConfigDict(env_prefix="MESSAGING_", frozen=True)
 
+    # [if rabbitmq]
     PUBLISHER: MessageBroker = MessageBroker.RABBITMQ
+    # [endif]
+    # [ifc kafka and not rabbitmq]
+    # PUBLISHER: MessageBroker = MessageBroker.KAFKA
+    # [endif]
     OUTBOX_BATCH_SIZE: int = 100
     OUTBOX_POLL_INTERVAL: float = 1.0
+
+
+# [endif]
 
 
 class TelemetryConfig(ConfigBase):
@@ -135,9 +164,19 @@ class Config(ConfigBase):
     app: AppConfig = Field(default_factory=AppConfig)  # type: ignore[arg-type]
     logging: LoggingConfig = Field(default_factory=LoggingConfig)  # type: ignore[arg-type]
     postgres: PostgresConfig = Field(default_factory=PostgresConfig)  # type: ignore[arg-type]
+    # [if rabbitmq]
     rabbitmq: RabbitMQConfig = Field(default_factory=RabbitMQConfig)  # type: ignore[arg-type]
+    # [endif]
+    # [if kafka]
     kafka: KafkaConfig = Field(default_factory=KafkaConfig)  # type: ignore[arg-type]
+    # [endif]
+    # [if redis]
     redis: RedisConfig = Field(default_factory=RedisConfig)  # type: ignore[arg-type]
+    # [endif]
+    # [if minio]
     minio: MinIOConfig = Field(default_factory=MinIOConfig)  # type: ignore[arg-type]
+    # [endif]
+    # [if messaging]
     messaging: MessagingConfig = Field(default_factory=MessagingConfig)
+    # [endif]
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)

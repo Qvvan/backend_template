@@ -18,6 +18,7 @@ class ConsumerContainer:
         self._infra = infra
         self._services = services
 
+    # [if rabbitmq]
     @cached_property
     def rabbitmq(self) -> IConsumer:
         return BackendConsumer(
@@ -26,6 +27,9 @@ class ConsumerContainer:
             # scaffold:rabbitmq-handlers
         )
 
+    # [endif]
+
+    # [if kafka]
     @cached_property
     def kafka(self) -> IConsumer:
         return KafkaBackendConsumer(
@@ -34,16 +38,29 @@ class ConsumerContainer:
             # scaffold:kafka-handlers
         )
 
+    # [endif]
+
     @property
     def all(self) -> list[IConsumer]:
-        return [self.rabbitmq, self.kafka]
+        return [
+            # [if rabbitmq]
+            self.rabbitmq,
+            # [endif]
+            # [if kafka]
+            self.kafka,
+            # [endif]
+        ]
 
     async def start(self) -> None:
         for consumer in self.all:
             await consumer.start()
 
     async def stop(self) -> None:
+        # [if rabbitmq]
         if "rabbitmq" in self.__dict__:
             await self.rabbitmq.stop()
+        # [endif]
+        # [if kafka]
         if "kafka" in self.__dict__:
             await self.kafka.stop()
+        # [endif]

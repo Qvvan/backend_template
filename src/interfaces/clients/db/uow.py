@@ -10,6 +10,7 @@ from src.interfaces.repositories.outbox_repository import IOutboxRepository
 class ITransactionSession(ABC):
     """Repositories bound to one open transaction. Add one property per aggregate the UoW must span."""
 
+    # [if messaging]
     @property
     @abstractmethod
     def outbox(self) -> IOutboxRepository:
@@ -19,6 +20,8 @@ class ITransactionSession(ABC):
     @abstractmethod
     def inbox(self) -> IInboxRepository:
         raise NotImplementedError
+
+    # [endif]
 
     # scaffold:session-interface
 

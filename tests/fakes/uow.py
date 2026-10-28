@@ -9,6 +9,7 @@ from src.interfaces.repositories.inbox_repository import IInboxRepository
 from src.interfaces.repositories.outbox_repository import IOutboxRepository
 
 
+# [if messaging]
 class InMemoryOutboxRepository(IOutboxRepository):
     def __init__(self) -> None:
         self.messages: list[OutgoingMessage] = []
@@ -40,6 +41,9 @@ class InMemoryInboxRepository(IInboxRepository):
         return True
 
 
+# [endif]
+
+
 class FakeUnitOfWork(IUnitOfWork):
     """In-memory UoW: repositories are shared between transactions; counts commits and rollbacks.
 
@@ -47,8 +51,10 @@ class FakeUnitOfWork(IUnitOfWork):
     """
 
     def __init__(self) -> None:
+        # [if messaging]
         self.outbox = InMemoryOutboxRepository()
         self.inbox = InMemoryInboxRepository()
+        # [endif]
         # scaffold:fake-uow-repositories
         self.commits = 0
         self.rollbacks = 0
@@ -67,6 +73,7 @@ class FakeTransactionSession(ITransactionSession):
     def __init__(self, uow: FakeUnitOfWork) -> None:
         self._uow = uow
 
+    # [if messaging]
     @property
     def outbox(self) -> IOutboxRepository:
         return self._uow.outbox
@@ -74,5 +81,7 @@ class FakeTransactionSession(ITransactionSession):
     @property
     def inbox(self) -> IInboxRepository:
         return self._uow.inbox
+
+    # [endif]
 
     # scaffold:fake-session-repositories

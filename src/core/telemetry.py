@@ -7,6 +7,9 @@ from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 from opentelemetry.instrumentation.aiokafka import AIOKafkaInstrumentor
 from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.instrumentor import (
+    BaseInstrumentor,
+)
 from opentelemetry.instrumentation.redis import RedisInstrumentor
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -29,7 +32,19 @@ def setup_tracing(*, service_name: str, otlp_endpoint: str) -> None:
     provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=f"{otlp_endpoint.rstrip('/')}/v1/traces")))
     trace.set_tracer_provider(provider)
 
-    for instrumentor in (AsyncPGInstrumentor(), RedisInstrumentor(), AioPikaInstrumentor(), AIOKafkaInstrumentor()):
+    instrumentors: list[BaseInstrumentor] = [
+        AsyncPGInstrumentor(),
+        # [if redis]
+        RedisInstrumentor(),
+        # [endif]
+        # [if rabbitmq]
+        AioPikaInstrumentor(),
+        # [endif]
+        # [if kafka]
+        AIOKafkaInstrumentor(),
+        # [endif]
+    ]
+    for instrumentor in instrumentors:
         if not instrumentor.is_instrumented_by_opentelemetry:
             instrumentor.instrument()
 

@@ -31,6 +31,7 @@ _MESSAGE = OutgoingMessage(
 )
 
 
+# [if rabbitmq]
 async def test_rabbitmq_publish_message_maps_fields() -> None:
     rabbit = AsyncMock(spec=IAMQPClient)
     await RabbitMQMessagePublisher(rabbit=rabbit).publish_message(_MESSAGE)
@@ -54,6 +55,10 @@ async def test_rabbitmq_publish_event_uses_event_routing() -> None:
     assert kwargs["payload"]["order_id"] == "o-1"
 
 
+# [endif]
+
+
+# [if kafka]
 async def test_kafka_publish_message_maps_fields() -> None:
     kafka = AsyncMock(spec=IKafkaClient)
     await KafkaMessagePublisher(kafka=kafka).publish_message(_MESSAGE)
@@ -73,3 +78,6 @@ async def test_kafka_publish_event_uses_partition_key() -> None:
     assert kwargs["topic"] == "orders"
     assert kwargs["key"] == "o-1"
     assert kwargs["headers"]["x-event-type"] == "order.paid"
+
+
+# [endif]

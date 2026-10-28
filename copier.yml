@@ -1,0 +1,61 @@
+# Create a new service from this template:
+#   uvx copier copy --trust gh:qvvan/backend_template my_service
+# Update it later (3-way merge with your changes):
+#   uvx copier update --trust
+# --trust is needed because a post-copy task (tools/init_project.py) removes unselected components.
+
+_min_copier_version: "9.4.0"
+_templates_suffix: .tmpl
+_answers_file: .copier-answers.yml
+_exclude:
+  - copier.yml
+  - .git
+  - .venv
+  - "__pycache__"
+  - "*.py[co]"
+  - .ruff_cache
+  - .pytest_cache
+  - .mypy_cache
+  - .env
+  - .DS_Store
+
+project_name:
+  type: str
+  help: Project name, snake_case (Python project, Docker images, queue prefix, OTEL service name)
+  default: my_service
+  validator: >-
+    {% if not (project_name | length > 0 and project_name[0].isalpha() and project_name.replace('_', '').isalnum() and project_name == project_name.lower()) %}
+    Use snake_case: lowercase letters, digits and underscores, starting with a letter
+    {% endif %}
+
+redis:
+  type: bool
+  help: Redis — cache (RedisRepository)?
+  default: true
+
+rabbitmq:
+  type: bool
+  help: RabbitMQ — consumers with retries/DLQ, event publishing via the outbox?
+  default: true
+
+kafka:
+  type: bool
+  help: Kafka — consumers with retries/DLQ, event publishing via the outbox?
+  default: false
+
+minio:
+  type: bool
+  help: MinIO / S3 object storage?
+  default: false
+
+lock_dependencies:
+  type: bool
+  help: Refresh uv.lock for the selected components now (needs network; otherwise run `uv lock` later)?
+  default: true
+
+_tasks:
+  - >-
+    "{{ _copier_python }}" tools/init_project.py
+    --name {{ project_name }}
+    --redis {{ redis }} --rabbitmq {{ rabbitmq }} --kafka {{ kafka }} --minio {{ minio }}
+    --lock {{ lock_dependencies }}

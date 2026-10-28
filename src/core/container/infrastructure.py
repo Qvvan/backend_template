@@ -34,6 +34,7 @@ class InfrastructureContainer:
             logger=self._logger,
         )
 
+    # [if redis]
     @cached_property
     def redis_db(self) -> RedisDB:
         return RedisDB(
@@ -47,6 +48,9 @@ class InfrastructureContainer:
             socket_connect_timeout=self._config.redis.SOCKET_CONNECT_TIMEOUT,
         )
 
+    # [endif]
+
+    # [if rabbitmq]
     @cached_property
     def rabbitmq(self) -> RabbitMQClient:
         return RabbitMQClient(
@@ -62,6 +66,9 @@ class InfrastructureContainer:
             logger=self._logger,
         )
 
+    # [endif]
+
+    # [if kafka]
     @cached_property
     def kafka(self) -> KafkaClient:
         return KafkaClient(
@@ -79,11 +86,23 @@ class InfrastructureContainer:
             logger=self._logger,
         )
 
+    # [endif]
+
+    # [if messaging]
     @cached_property
     def message_publisher(self) -> IMessagePublisher:
+        # [if kafka and rabbitmq]
         if self._config.messaging.PUBLISHER == MessageBroker.KAFKA:
             return KafkaMessagePublisher(kafka=self.kafka)
+        # [endif]
+        # [if rabbitmq]
         return RabbitMQMessagePublisher(rabbit=self.rabbitmq)
+        # [endif]
+        # [ifc kafka and not rabbitmq]
+        # return KafkaMessagePublisher(kafka=self.kafka)
+        # [endif]
+
+    # [endif]
 
     @cached_property
     def postgresql_query_executor(self) -> IQueryExecutor:
@@ -93,6 +112,7 @@ class InfrastructureContainer:
     def postgres_unit_of_work(self) -> PostgresUnitOfWork:
         return PostgresUnitOfWork(pool=self.postgres_db)
 
+    # [if minio]
     @cached_property
     def minio_client(self) -> MinIOClient:
         return MinIOClient(
@@ -103,14 +123,24 @@ class InfrastructureContainer:
             secure=self._config.minio.SECURE,
         )
 
+    # [endif]
+
     async def close(self) -> None:
         if "postgres_db" in self.__dict__:
             await self.postgres_db.close()
+        # [if redis]
         if "redis_db" in self.__dict__:
             await self.redis_db.close()
+        # [endif]
+        # [if rabbitmq]
         if "rabbitmq" in self.__dict__:
             await self.rabbitmq.close()
+        # [endif]
+        # [if kafka]
         if "kafka" in self.__dict__:
             await self.kafka.close()
+        # [endif]
+        # [if minio]
         if "minio_client" in self.__dict__:
             await self.minio_client.close()
+        # [endif]
