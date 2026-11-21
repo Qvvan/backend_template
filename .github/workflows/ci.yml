@@ -14,10 +14,10 @@ jobs:
     name: Lint, types, architecture
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
         with:
-          python-version: "3.12"
+          python-version: "3.12.7"
           enable-cache: true
       - run: uv sync --locked
       - name: ruff check
@@ -35,10 +35,10 @@ jobs:
     name: Unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
         with:
-          python-version: "3.12"
+          python-version: "3.12.7"
           enable-cache: true
       - run: uv sync --locked
       - run: uv run pytest --cov=src --cov-report=term-missing
@@ -47,10 +47,10 @@ jobs:
     name: Integration tests (testcontainers)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
         with:
-          python-version: "3.12"
+          python-version: "3.12.7"
           enable-cache: true
       - run: uv sync --locked
       - run: uv run pytest -m integration
@@ -59,10 +59,10 @@ jobs:
     name: Generated code passes every check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
         with:
-          python-version: "3.12"
+          python-version: "3.12.7"
           enable-cache: true
       - run: uv sync --locked
       - name: Generate a feature with events, a plain feature, a worker and consumers for both brokers
@@ -104,12 +104,12 @@ jobs:
           - { name: kafka, data: "--data redis=false --data rabbitmq=false --data kafka=true --data minio=false" }
           - { name: redis-minio, data: "--data redis=true --data rabbitmq=false --data kafka=false --data minio=true" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10
         with:
-          python-version: "3.12"
+          python-version: "3.12.7"
           enable-cache: true
       - name: Generate the project
         run: uvx copier copy --trust --defaults --vcs-ref HEAD --data project_name=demo_service ${{ matrix.variant.data }} . ../demo
@@ -132,9 +132,9 @@ jobs:
     name: Docker image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
         with:
           context: .
           push: false
